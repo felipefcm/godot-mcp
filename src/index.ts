@@ -777,7 +777,7 @@ class GodotServer {
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
             },
             required: ['projectPath'],
@@ -791,7 +791,7 @@ class GodotServer {
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               scene: {
                 type: 'string',
@@ -854,7 +854,7 @@ class GodotServer {
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
             },
             required: ['projectPath'],
@@ -868,7 +868,7 @@ class GodotServer {
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               scenePath: {
                 type: 'string',
@@ -890,11 +890,11 @@ class GodotServer {
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               scenePath: {
                 type: 'string',
-                description: 'Path to the scene file (relative to project)',
+                description: 'Scene file path (relative to project)',
               },
               parentNodePath: {
                 type: 'string',
@@ -924,11 +924,11 @@ class GodotServer {
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               scenePath: {
                 type: 'string',
-                description: 'Path to the scene file (relative to project)',
+                description: 'Scene file path (relative to project)',
               },
               nodePath: {
                 type: 'string',
@@ -950,7 +950,7 @@ class GodotServer {
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               scenePath: {
                 type: 'string',
@@ -979,11 +979,11 @@ class GodotServer {
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               scenePath: {
                 type: 'string',
-                description: 'Path to the scene file (relative to project)',
+                description: 'Scene file path (relative to project)',
               },
               newPath: {
                 type: 'string',
@@ -1001,7 +1001,7 @@ class GodotServer {
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               filePath: {
                 type: 'string',
@@ -1013,13 +1013,13 @@ class GodotServer {
         },
         {
           name: 'update_project_uids',
-          description: 'Update UID references in a Godot project by resaving resources (for Godot 4.4+)',
+          description: 'Update UID references by resaving resources (4.4+)',
           inputSchema: {
             type: 'object',
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
             },
             required: ['projectPath'],
@@ -1027,7 +1027,7 @@ class GodotServer {
         },
         {
           name: 'game_screenshot',
-          description: 'Take a screenshot of the running Godot game. Returns a base64-encoded PNG image.',
+          description: 'Screenshot the running game (returns base64 PNG)',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -1058,7 +1058,7 @@ class GodotServer {
         },
         {
           name: 'game_key_press',
-          description: 'Send a key press or Godot input action to the running game. Provide either "key" (e.g. "W", "Space", "Escape") or "action" (e.g. "move_forward", "ui_accept").',
+          description: 'Send a key press or input action to the running game',
           inputSchema: {
             type: 'object',
             properties: {
@@ -1106,7 +1106,7 @@ class GodotServer {
         },
         {
           name: 'game_get_ui',
-          description: 'Get all visible UI elements (Controls) from the running game, including their names, types, positions, sizes, and text content',
+          description: 'Get visible UI elements from the running game',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -1115,7 +1115,7 @@ class GodotServer {
         },
         {
           name: 'game_get_scene_tree',
-          description: 'Get the full scene tree structure of the running game with node names and types',
+          description: 'Get scene tree structure of the running game',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -1124,7 +1124,7 @@ class GodotServer {
         },
 {
           name: 'game_eval',
-          description: 'Execute arbitrary GDScript code in the running game and return the result. The code is wrapped in a function, use "return" to return values. Example: "return 2 + 2" returns 4.',
+          description: 'Execute GDScript in the running game. Use "return" for values.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -1156,7 +1156,7 @@ class GodotServer {
         },
         {
           name: 'game_set_property',
-          description: 'Set a property value on any node in the running game. Supports auto-conversion for Vector2, Vector3, Color (pass as {x,y}, {x,y,z}, {r,g,b,a}).',
+          description: 'Set a property on a node in the running game',
           inputSchema: {
             type: 'object',
             properties: {
@@ -1203,7 +1203,7 @@ class GodotServer {
         },
         {
           name: 'game_get_node_info',
-          description: 'Get detailed information about a node: class, properties (with values), signals, methods, and children',
+          description: 'Get node info: class, properties, signals, methods, children',
           inputSchema: {
             type: 'object',
             properties: {
@@ -1277,7 +1277,7 @@ class GodotServer {
         },
         {
           name: 'game_performance',
-          description: 'Get performance metrics from the running game: FPS, frame time, memory usage, object counts, draw calls',
+          description: 'Get performance metrics (FPS, memory, draw calls)',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -1286,7 +1286,7 @@ class GodotServer {
         },
         {
           name: 'game_wait',
-          description: 'Wait for N frames in the running game before responding. Useful for timing-sensitive operations.',
+          description: 'Wait N frames in the running game',
           inputSchema: {
             type: 'object',
             properties: {
@@ -1300,17 +1300,17 @@ class GodotServer {
         },
 {
           name: 'read_scene',
-          description: 'Read a scene file and return its full node tree structure with all node types, names, and properties as JSON. Does not require the game to be running.',
+          description: 'Read scene file as JSON node tree (headless)',
           inputSchema: {
             type: 'object',
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               scenePath: {
                 type: 'string',
-                description: 'Path to the scene file (relative to project)',
+                description: 'Scene file path (relative to project)',
               },
             },
             required: ['projectPath', 'scenePath'],
@@ -1318,17 +1318,17 @@ class GodotServer {
         },
         {
           name: 'modify_scene_node',
-          description: 'Modify properties of a node in a scene file. Does not require the game to be running.',
+          description: 'Modify node properties in a scene file (headless)',
           inputSchema: {
             type: 'object',
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               scenePath: {
                 type: 'string',
-                description: 'Path to the scene file (relative to project)',
+                description: 'Scene file path (relative to project)',
               },
               nodePath: {
                 type: 'string',
@@ -1344,17 +1344,17 @@ class GodotServer {
         },
         {
           name: 'remove_scene_node',
-          description: 'Remove a node from a scene file. Does not require the game to be running.',
+          description: 'Remove a node from a scene file (headless)',
           inputSchema: {
             type: 'object',
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               scenePath: {
                 type: 'string',
-                description: 'Path to the scene file (relative to project)',
+                description: 'Scene file path (relative to project)',
               },
               nodePath: {
                 type: 'string',
@@ -1366,13 +1366,13 @@ class GodotServer {
         },
 {
           name: 'read_project_settings',
-          description: 'Parse and return the project.godot file as structured JSON with all sections and key-value pairs',
+          description: 'Read project.godot as structured JSON',
           inputSchema: {
             type: 'object',
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
             },
             required: ['projectPath'],
@@ -1380,13 +1380,13 @@ class GodotServer {
         },
         {
           name: 'modify_project_settings',
-          description: 'Modify a setting in the project.godot file. Specify the section, key, and value.',
+          description: 'Modify a project.godot setting',
           inputSchema: {
             type: 'object',
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               section: {
                 type: 'string',
@@ -1406,13 +1406,13 @@ class GodotServer {
         },
         {
           name: 'list_project_files',
-          description: 'List files in a Godot project directory, optionally filtered by extension(s). Returns file paths relative to the project root.',
+          description: 'List project files, optionally filtered by extension',
           inputSchema: {
             type: 'object',
             properties: {
               projectPath: {
                 type: 'string',
-                description: 'Path to the Godot project directory',
+                description: 'Godot project path',
               },
               extensions: {
                 type: 'array',
@@ -1483,7 +1483,7 @@ class GodotServer {
         },
         {
           name: 'game_tween_property',
-          description: 'Smoothly animate a property on a node using a Tween. Supports Vector2, Vector3, Color, float.',
+          description: 'Tween a node property in the running game',
           inputSchema: {
             type: 'object',
             properties: {
@@ -1491,8 +1491,8 @@ class GodotServer {
               property: { type: 'string', description: 'Property to tween (e.g., "position", "modulate")' },
               finalValue: { description: 'Target value. Use {x,y} for Vector2, {x,y,z} for Vector3, {r,g,b,a} for Color' },
               duration: { type: 'number', description: 'Duration in seconds. Default: 1.0' },
-              transType: { type: 'number', description: 'Transition type (0=LINEAR, 1=SINE, 2=QUINT, 3=QUART, 4=QUAD, 5=EXPO, 6=ELASTIC, 7=CUBIC, 8=CIRC, 9=BOUNCE, 10=BACK, 11=SPRING). Default: 0' },
-              easeType: { type: 'number', description: 'Ease type (0=IN, 1=OUT, 2=IN_OUT, 3=OUT_IN). Default: 2' },
+              transType: { type: 'number', description: 'Tween.TransitionType enum value. Default: 0 (LINEAR)' },
+              easeType: { type: 'number', description: 'Tween.EaseType enum value. Default: 2 (IN_OUT)' },
             },
             required: ['nodePath', 'property', 'finalValue'],
           },
@@ -1535,12 +1535,12 @@ class GodotServer {
         },
 {
           name: 'attach_script',
-          description: 'Attach a GDScript file to a node in a scene file. Does not require the game to be running.',
+          description: 'Attach a GDScript to a scene node (headless)',
           inputSchema: {
             type: 'object',
             properties: {
-              projectPath: { type: 'string', description: 'Path to the Godot project directory' },
-              scenePath: { type: 'string', description: 'Path to the scene file (relative to project)' },
+              projectPath: { type: 'string', description: 'Godot project path' },
+              scenePath: { type: 'string', description: 'Scene file path (relative to project)' },
               nodePath: { type: 'string', description: 'Path to the node within the scene (e.g., "root/Player")' },
               scriptPath: { type: 'string', description: 'Path to the .gd script file (relative to project)' },
             },
@@ -1549,11 +1549,11 @@ class GodotServer {
         },
         {
           name: 'create_resource',
-          description: 'Create a new Godot resource file (.tres). Supports any Resource subclass (StandardMaterial3D, Theme, AudioStream, etc.).',
+          description: 'Create a .tres resource file (headless)',
           inputSchema: {
             type: 'object',
             properties: {
-              projectPath: { type: 'string', description: 'Path to the Godot project directory' },
+              projectPath: { type: 'string', description: 'Godot project path' },
               resourceType: { type: 'string', description: 'Godot class name (e.g., "StandardMaterial3D", "Theme", "Environment")' },
               resourcePath: { type: 'string', description: 'Where to save the .tres file (relative to project)' },
               properties: { type: 'object', description: 'Optional properties to set on the resource' },
