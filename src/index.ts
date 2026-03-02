@@ -535,6 +535,46 @@ class GodotServer {
     await this.server.close();
   }
 
+  private async gameCommand(
+    name: string,
+    args: any,
+    argsFn: (a: any) => Record<string, any>,
+    timeoutMs?: number
+  ): Promise<any> {
+    if (!this.activeProcess) return createErrorResponse('No active Godot process. Use run_project first.');
+    if (!this.gameConnection.connected) return createErrorResponse('Not connected to game interaction server.');
+    args = normalizeParameters(args || {});
+    try {
+      const response = await this.sendGameCommand(name, argsFn(args), timeoutMs);
+      if (response.error) return createErrorResponse(`${name} failed: ${response.error}`);
+      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
+    } catch (error: any) {
+      return createErrorResponse(`${name} failed: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  private async headlessOp(
+    operation: string,
+    args: any,
+    argsFn: (a: any) => { projectPath: string; params: OperationParams }
+  ): Promise<any> {
+    args = normalizeParameters(args || {});
+    const { projectPath, params } = argsFn(args);
+
+    if (!projectPath) return createErrorResponse('projectPath is required.');
+    if (!validatePath(projectPath)) return createErrorResponse('Invalid path.');
+
+    const projectFile = join(projectPath, 'project.godot');
+    if (!existsSync(projectFile)) return createErrorResponse(`Not a valid Godot project: ${projectPath}`);
+
+    try {
+      const { stdout, stderr } = await this.executeOperation(operation, params, projectPath);
+      if (stderr && stderr.includes('Failed to')) return createErrorResponse(`${operation} failed: ${stderr}`);
+      return { content: [{ type: 'text', text: `${operation} succeeded.\n\nOutput: ${stdout}` }] };
+    } catch (error: any) {
+      return createErrorResponse(`${operation} failed: ${error?.message || 'Unknown error'}`);
+    }
+  }
 
   /**
    * Execute a Godot operation using the operations script
@@ -1082,8 +1122,7 @@ class GodotServer {
             required: [],
           },
         },
-        // ==================== New Runtime Interaction Tools ====================
-        {
+{
           name: 'game_eval',
           description: 'Execute arbitrary GDScript code in the running game and return the result. The code is wrapped in a function, use "return" to return values. Example: "return 2 + 2" returns 4.',
           inputSchema: {
@@ -1259,8 +1298,7 @@ class GodotServer {
             required: [],
           },
         },
-        // ==================== Headless Scene Tools ====================
-        {
+{
           name: 'read_scene',
           description: 'Read a scene file and return its full node tree structure with all node types, names, and properties as JSON. Does not require the game to be running.',
           inputSchema: {
@@ -1326,8 +1364,7 @@ class GodotServer {
             required: ['projectPath', 'scenePath', 'nodePath'],
           },
         },
-        // ==================== Project Management Tools ====================
-        {
+{
           name: 'read_project_settings',
           description: 'Parse and return the project.godot file as structured JSON with all sections and key-value pairs',
           inputSchema: {
@@ -1390,8 +1427,7 @@ class GodotServer {
             required: ['projectPath'],
           },
         },
-        // ==================== Runtime Signal & Animation Tools ====================
-        {
+{
           name: 'game_connect_signal',
           description: 'Connect a signal from one node to a method on another node in the running game',
           inputSchema: {
@@ -1497,8 +1533,7 @@ class GodotServer {
             required: ['nodePath', 'newParentPath'],
           },
         },
-        // ==================== Headless Resource Tools ====================
-        {
+{
           name: 'attach_script',
           description: 'Attach a GDScript file to a node in a scene file. Does not require the game to be running.',
           inputSchema: {
@@ -2751,7 +2786,6 @@ class GodotServer {
     }
   }
 
-  // ==================== Game Interaction Handlers ====================
 
   /**
    * Handle the game_screenshot tool
@@ -2787,483 +2821,100 @@ class GodotServer {
     }
   }
 
-  /**
-   * Handle the game_click tool
-   */
   private async handleGameClick(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
-    args = normalizeParameters(args || {});
-    const x = args.x ?? 0;
-    const y = args.y ?? 0;
-    const button = args.button ?? 1;
-
-    try {
-      const response = await this.sendGameCommand('click', { x, y, button });
-      if (response.error) {
-        return createErrorResponse(`Click failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: `Clicked at (${x}, ${y}) with button ${button}` }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Click failed: ${error?.message || 'Unknown error'}`);
-    }
+    return this.gameCommand('click', args, a => ({ x: a.x ?? 0, y: a.y ?? 0, button: a.button ?? 1 }));
   }
 
-  /**
-   * Handle the game_key_press tool
-   */
   private async handleGameKeyPress(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
     args = args || {};
+    if (!args.key && !args.action) return createErrorResponse('Must provide either "key" or "action" parameter.');
     const params: Record<string, any> = {};
     if (args.key) params.key = args.key;
     if (args.action) params.action = args.action;
     if (args.pressed !== undefined) params.pressed = args.pressed;
-
-    if (!params.key && !params.action) {
-      return createErrorResponse('Must provide either "key" or "action" parameter.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('key_press', params);
-      if (response.error) {
-        return createErrorResponse(`Key press failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: `Key press: ${JSON.stringify(params)}` }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Key press failed: ${error?.message || 'Unknown error'}`);
-    }
+    return this.gameCommand('key_press', args, () => params);
   }
 
-  /**
-   * Handle the game_mouse_move tool
-   */
   private async handleGameMouseMove(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
-    args = args || {};
-    const params = {
-      x: args.x ?? 0,
-      y: args.y ?? 0,
-      relative_x: args.relative_x ?? 0,
-      relative_y: args.relative_y ?? 0,
-    };
-
-    try {
-      const response = await this.sendGameCommand('mouse_move', params);
-      if (response.error) {
-        return createErrorResponse(`Mouse move failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: `Mouse moved to (${params.x}, ${params.y})` }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Mouse move failed: ${error?.message || 'Unknown error'}`);
-    }
+    return this.gameCommand('mouse_move', args, a => ({
+      x: a.x ?? 0, y: a.y ?? 0, relative_x: a.relative_x ?? 0, relative_y: a.relative_y ?? 0,
+    }));
   }
 
-  /**
-   * Handle the game_get_ui tool
-   */
   private async handleGameGetUi() {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('get_ui_elements');
-      if (response.error) {
-        return createErrorResponse(`Get UI elements failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response.elements, null, 2) }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Get UI elements failed: ${error?.message || 'Unknown error'}`);
-    }
+    return this.gameCommand('get_ui_elements', {}, () => ({}));
   }
 
-  /**
-   * Handle the game_get_scene_tree tool
-   */
   private async handleGameGetSceneTree() {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('get_scene_tree');
-      if (response.error) {
-        return createErrorResponse(`Get scene tree failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response.tree, null, 2) }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Get scene tree failed: ${error?.message || 'Unknown error'}`);
-    }
+    return this.gameCommand('get_scene_tree', {}, () => ({}));
   }
 
-  // ==================== New Runtime Interaction Handlers ====================
-
-  /**
-   * Handle the game_eval tool - Execute arbitrary GDScript in the running game
-   */
   private async handleGameEval(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
     args = normalizeParameters(args || {});
-    if (!args.code) {
-      return createErrorResponse('code parameter is required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('eval', { code: args.code }, 30000);
-      if (response.error) {
-        return createErrorResponse(`Eval failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Eval failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.code) return createErrorResponse('code parameter is required.');
+    return this.gameCommand('eval', args, a => ({ code: a.code }), 30000);
   }
 
-  /**
-   * Handle the game_get_property tool
-   */
   private async handleGameGetProperty(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
     args = normalizeParameters(args || {});
-    if (!args.nodePath || !args.property) {
-      return createErrorResponse('nodePath and property are required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('get_property', {
-        node_path: args.nodePath,
-        property: args.property,
-      });
-      if (response.error) {
-        return createErrorResponse(`Get property failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Get property failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.nodePath || !args.property) return createErrorResponse('nodePath and property are required.');
+    return this.gameCommand('get_property', args, a => ({ node_path: a.nodePath, property: a.property }));
   }
 
-  /**
-   * Handle the game_set_property tool
-   */
   private async handleGameSetProperty(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
     args = normalizeParameters(args || {});
-    if (!args.nodePath || !args.property) {
-      return createErrorResponse('nodePath and property are required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('set_property', {
-        node_path: args.nodePath,
-        property: args.property,
-        value: args.value,
-        type_hint: args.typeHint || '',
-      });
-      if (response.error) {
-        return createErrorResponse(`Set property failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Set property failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.nodePath || !args.property) return createErrorResponse('nodePath and property are required.');
+    return this.gameCommand('set_property', args, a => ({
+      node_path: a.nodePath, property: a.property, value: a.value, type_hint: a.typeHint || '',
+    }));
   }
 
-  /**
-   * Handle the game_call_method tool
-   */
   private async handleGameCallMethod(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
     args = normalizeParameters(args || {});
-    if (!args.nodePath || !args.method) {
-      return createErrorResponse('nodePath and method are required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('call_method', {
-        node_path: args.nodePath,
-        method: args.method,
-        args: args.args || [],
-      });
-      if (response.error) {
-        return createErrorResponse(`Call method failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Call method failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.nodePath || !args.method) return createErrorResponse('nodePath and method are required.');
+    return this.gameCommand('call_method', args, a => ({
+      node_path: a.nodePath, method: a.method, args: a.args || [],
+    }));
   }
 
-  /**
-   * Handle the game_get_node_info tool
-   */
   private async handleGameGetNodeInfo(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
     args = normalizeParameters(args || {});
-    if (!args.nodePath) {
-      return createErrorResponse('nodePath is required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('get_node_info', {
-        node_path: args.nodePath,
-      });
-      if (response.error) {
-        return createErrorResponse(`Get node info failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Get node info failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.nodePath) return createErrorResponse('nodePath is required.');
+    return this.gameCommand('get_node_info', args, a => ({ node_path: a.nodePath }));
   }
 
-  /**
-   * Handle the game_instantiate_scene tool
-   */
   private async handleGameInstantiateScene(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
     args = normalizeParameters(args || {});
-    if (!args.scenePath) {
-      return createErrorResponse('scenePath is required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('instantiate_scene', {
-        scene_path: args.scenePath,
-        parent_path: args.parentPath || '/root',
-      });
-      if (response.error) {
-        return createErrorResponse(`Instantiate scene failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Instantiate scene failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.scenePath) return createErrorResponse('scenePath is required.');
+    return this.gameCommand('instantiate_scene', args, a => ({
+      scene_path: a.scenePath, parent_path: a.parentPath || '/root',
+    }));
   }
 
-  /**
-   * Handle the game_remove_node tool
-   */
   private async handleGameRemoveNode(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
     args = normalizeParameters(args || {});
-    if (!args.nodePath) {
-      return createErrorResponse('nodePath is required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('remove_node', {
-        node_path: args.nodePath,
-      });
-      if (response.error) {
-        return createErrorResponse(`Remove node failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Remove node failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.nodePath) return createErrorResponse('nodePath is required.');
+    return this.gameCommand('remove_node', args, a => ({ node_path: a.nodePath }));
   }
 
-  /**
-   * Handle the game_change_scene tool
-   */
   private async handleGameChangeScene(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
     args = normalizeParameters(args || {});
-    if (!args.scenePath) {
-      return createErrorResponse('scenePath is required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('change_scene', {
-        scene_path: args.scenePath,
-      });
-      if (response.error) {
-        return createErrorResponse(`Change scene failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: `Scene changed to: ${args.scenePath}` }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Change scene failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.scenePath) return createErrorResponse('scenePath is required.');
+    return this.gameCommand('change_scene', args, a => ({ scene_path: a.scenePath }));
   }
 
-  /**
-   * Handle the game_pause tool
-   */
   private async handleGamePause(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
-    args = args || {};
-    const paused = args.paused !== undefined ? args.paused : true;
-
-    try {
-      const response = await this.sendGameCommand('pause', { paused });
-      if (response.error) {
-        return createErrorResponse(`Pause failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: `Game ${paused ? 'paused' : 'unpaused'}` }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Pause failed: ${error?.message || 'Unknown error'}`);
-    }
+    return this.gameCommand('pause', args, a => ({ paused: a.paused !== undefined ? a.paused : true }));
   }
 
-  /**
-   * Handle the game_performance tool
-   */
   private async handleGamePerformance() {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('get_performance', {});
-      if (response.error) {
-        return createErrorResponse(`Get performance failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Get performance failed: ${error?.message || 'Unknown error'}`);
-    }
+    return this.gameCommand('get_performance', {}, () => ({}));
   }
 
-  /**
-   * Handle the game_wait tool
-   */
   private async handleGameWait(args: any) {
-    if (!this.activeProcess) {
-      return createErrorResponse('No active Godot process. Use run_project first.');
-    }
-    if (!this.gameConnection.connected) {
-      return createErrorResponse('Not connected to game interaction server.');
-    }
-
-    args = args || {};
-    const frames = args.frames || 1;
-
-    try {
-      const response = await this.sendGameCommand('wait', { frames }, 30000);
-      if (response.error) {
-        return createErrorResponse(`Wait failed: ${response.error}`);
-      }
-      return {
-        content: [{ type: 'text', text: `Waited ${frames} frames` }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Wait failed: ${error?.message || 'Unknown error'}`);
-    }
+    return this.gameCommand('wait', args, a => ({ frames: a.frames || 1 }), 30000);
   }
 
-  // ==================== Headless Scene Handlers ====================
 
   /**
    * Handle the read_scene tool - Read a scene file structure
@@ -3326,85 +2977,24 @@ class GodotServer {
    */
   private async handleModifySceneNode(args: any) {
     args = normalizeParameters(args || {});
-    if (!args.projectPath || !args.scenePath || !args.nodePath || !args.properties) {
+    if (!args.projectPath || !args.scenePath || !args.nodePath || !args.properties)
       return createErrorResponse('projectPath, scenePath, nodePath, and properties are required.');
-    }
-
-    if (!validatePath(args.projectPath) || !validatePath(args.scenePath)) {
-      return createErrorResponse('Invalid path.');
-    }
-
-    const projectFile = join(args.projectPath, 'project.godot');
-    if (!existsSync(projectFile)) {
-      return createErrorResponse(`Not a valid Godot project: ${args.projectPath}`);
-    }
-
-    const scenePath = join(args.projectPath, args.scenePath);
-    if (!existsSync(scenePath)) {
-      return createErrorResponse(`Scene file does not exist: ${args.scenePath}`);
-    }
-
-    try {
-      const { stdout, stderr } = await this.executeOperation('modify_node', {
-        scenePath: args.scenePath,
-        nodePath: args.nodePath,
-        properties: args.properties,
-      }, args.projectPath);
-
-      if (stderr && stderr.includes('Failed to')) {
-        return createErrorResponse(`Failed to modify scene node: ${stderr}`);
-      }
-
-      return {
-        content: [{ type: 'text', text: `Node modified successfully.\n\nOutput: ${stdout}` }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Failed to modify scene node: ${error?.message || 'Unknown error'}`);
-    }
+    return this.headlessOp('modify_node', args, a => ({
+      projectPath: a.projectPath,
+      params: { scenePath: a.scenePath, nodePath: a.nodePath, properties: a.properties },
+    }));
   }
 
-  /**
-   * Handle the remove_scene_node tool
-   */
   private async handleRemoveSceneNode(args: any) {
     args = normalizeParameters(args || {});
-    if (!args.projectPath || !args.scenePath || !args.nodePath) {
+    if (!args.projectPath || !args.scenePath || !args.nodePath)
       return createErrorResponse('projectPath, scenePath, and nodePath are required.');
-    }
-
-    if (!validatePath(args.projectPath) || !validatePath(args.scenePath)) {
-      return createErrorResponse('Invalid path.');
-    }
-
-    const projectFile = join(args.projectPath, 'project.godot');
-    if (!existsSync(projectFile)) {
-      return createErrorResponse(`Not a valid Godot project: ${args.projectPath}`);
-    }
-
-    const scenePath = join(args.projectPath, args.scenePath);
-    if (!existsSync(scenePath)) {
-      return createErrorResponse(`Scene file does not exist: ${args.scenePath}`);
-    }
-
-    try {
-      const { stdout, stderr } = await this.executeOperation('remove_node', {
-        scenePath: args.scenePath,
-        nodePath: args.nodePath,
-      }, args.projectPath);
-
-      if (stderr && stderr.includes('Failed to')) {
-        return createErrorResponse(`Failed to remove scene node: ${stderr}`);
-      }
-
-      return {
-        content: [{ type: 'text', text: `Node removed successfully.\n\nOutput: ${stdout}` }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Failed to remove scene node: ${error?.message || 'Unknown error'}`);
-    }
+    return this.headlessOp('remove_node', args, a => ({
+      projectPath: a.projectPath,
+      params: { scenePath: a.scenePath, nodePath: a.nodePath },
+    }));
   }
 
-  // ==================== Project Management Handlers ====================
 
   /**
    * Handle the read_project_settings tool - Parse project.godot as JSON
@@ -3579,266 +3169,89 @@ class GodotServer {
     }
   }
 
-  // ==================== Runtime Signal/Animation/Group Handlers ====================
-
   private async handleGameConnectSignal(args: any) {
-    if (!this.activeProcess) return createErrorResponse('No active Godot process. Use run_project first.');
-    if (!this.gameConnection.connected) return createErrorResponse('Not connected to game interaction server.');
-
     args = normalizeParameters(args || {});
-    if (!args.nodePath || !args.signalName || !args.targetPath || !args.method) {
+    if (!args.nodePath || !args.signalName || !args.targetPath || !args.method)
       return createErrorResponse('nodePath, signalName, targetPath, and method are required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('connect_signal', {
-        node_path: args.nodePath,
-        signal_name: args.signalName,
-        target_path: args.targetPath,
-        method: args.method,
-      });
-      if (response.error) return createErrorResponse(`Connect signal failed: ${response.error}`);
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
-    } catch (error: any) {
-      return createErrorResponse(`Connect signal failed: ${error?.message || 'Unknown error'}`);
-    }
+    return this.gameCommand('connect_signal', args, a => ({
+      node_path: a.nodePath, signal_name: a.signalName, target_path: a.targetPath, method: a.method,
+    }));
   }
 
   private async handleGameDisconnectSignal(args: any) {
-    if (!this.activeProcess) return createErrorResponse('No active Godot process. Use run_project first.');
-    if (!this.gameConnection.connected) return createErrorResponse('Not connected to game interaction server.');
-
     args = normalizeParameters(args || {});
-    if (!args.nodePath || !args.signalName || !args.targetPath || !args.method) {
+    if (!args.nodePath || !args.signalName || !args.targetPath || !args.method)
       return createErrorResponse('nodePath, signalName, targetPath, and method are required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('disconnect_signal', {
-        node_path: args.nodePath,
-        signal_name: args.signalName,
-        target_path: args.targetPath,
-        method: args.method,
-      });
-      if (response.error) return createErrorResponse(`Disconnect signal failed: ${response.error}`);
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
-    } catch (error: any) {
-      return createErrorResponse(`Disconnect signal failed: ${error?.message || 'Unknown error'}`);
-    }
+    return this.gameCommand('disconnect_signal', args, a => ({
+      node_path: a.nodePath, signal_name: a.signalName, target_path: a.targetPath, method: a.method,
+    }));
   }
 
   private async handleGameEmitSignal(args: any) {
-    if (!this.activeProcess) return createErrorResponse('No active Godot process. Use run_project first.');
-    if (!this.gameConnection.connected) return createErrorResponse('Not connected to game interaction server.');
-
     args = normalizeParameters(args || {});
-    if (!args.nodePath || !args.signalName) {
-      return createErrorResponse('nodePath and signalName are required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('emit_signal', {
-        node_path: args.nodePath,
-        signal_name: args.signalName,
-        args: args.args || [],
-      });
-      if (response.error) return createErrorResponse(`Emit signal failed: ${response.error}`);
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
-    } catch (error: any) {
-      return createErrorResponse(`Emit signal failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.nodePath || !args.signalName) return createErrorResponse('nodePath and signalName are required.');
+    return this.gameCommand('emit_signal', args, a => ({
+      node_path: a.nodePath, signal_name: a.signalName, args: a.args || [],
+    }));
   }
 
   private async handleGamePlayAnimation(args: any) {
-    if (!this.activeProcess) return createErrorResponse('No active Godot process. Use run_project first.');
-    if (!this.gameConnection.connected) return createErrorResponse('Not connected to game interaction server.');
-
     args = normalizeParameters(args || {});
-    if (!args.nodePath) {
-      return createErrorResponse('nodePath is required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('play_animation', {
-        node_path: args.nodePath,
-        action: args.action || 'play',
-        animation: args.animation || '',
-      });
-      if (response.error) return createErrorResponse(`Play animation failed: ${response.error}`);
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
-    } catch (error: any) {
-      return createErrorResponse(`Play animation failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.nodePath) return createErrorResponse('nodePath is required.');
+    return this.gameCommand('play_animation', args, a => ({
+      node_path: a.nodePath, action: a.action || 'play', animation: a.animation || '',
+    }));
   }
 
   private async handleGameTweenProperty(args: any) {
-    if (!this.activeProcess) return createErrorResponse('No active Godot process. Use run_project first.');
-    if (!this.gameConnection.connected) return createErrorResponse('Not connected to game interaction server.');
-
     args = normalizeParameters(args || {});
-    if (!args.nodePath || !args.property || args.finalValue === undefined) {
+    if (!args.nodePath || !args.property || args.finalValue === undefined)
       return createErrorResponse('nodePath, property, and finalValue are required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('tween_property', {
-        node_path: args.nodePath,
-        property: args.property,
-        final_value: args.finalValue,
-        duration: args.duration || 1.0,
-        trans_type: args.transType || 0,
-        ease_type: args.easeType || 2,
-      });
-      if (response.error) return createErrorResponse(`Tween property failed: ${response.error}`);
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
-    } catch (error: any) {
-      return createErrorResponse(`Tween property failed: ${error?.message || 'Unknown error'}`);
-    }
+    return this.gameCommand('tween_property', args, a => ({
+      node_path: a.nodePath, property: a.property, final_value: a.finalValue,
+      duration: a.duration || 1.0, trans_type: a.transType || 0, ease_type: a.easeType || 2,
+    }));
   }
 
   private async handleGameGetNodesInGroup(args: any) {
-    if (!this.activeProcess) return createErrorResponse('No active Godot process. Use run_project first.');
-    if (!this.gameConnection.connected) return createErrorResponse('Not connected to game interaction server.');
-
-    args = args || {};
-    if (!args.group) {
-      return createErrorResponse('group is required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('get_nodes_in_group', { group: args.group });
-      if (response.error) return createErrorResponse(`Get nodes in group failed: ${response.error}`);
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
-    } catch (error: any) {
-      return createErrorResponse(`Get nodes in group failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!(args || {}).group) return createErrorResponse('group is required.');
+    return this.gameCommand('get_nodes_in_group', args, a => ({ group: a.group }));
   }
 
   private async handleGameFindNodesByClass(args: any) {
-    if (!this.activeProcess) return createErrorResponse('No active Godot process. Use run_project first.');
-    if (!this.gameConnection.connected) return createErrorResponse('Not connected to game interaction server.');
-
     args = normalizeParameters(args || {});
-    if (!args.className) {
-      return createErrorResponse('className is required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('find_nodes_by_class', {
-        class_name: args.className,
-        root_path: args.rootPath || '/root',
-      });
-      if (response.error) return createErrorResponse(`Find nodes by class failed: ${response.error}`);
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
-    } catch (error: any) {
-      return createErrorResponse(`Find nodes by class failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.className) return createErrorResponse('className is required.');
+    return this.gameCommand('find_nodes_by_class', args, a => ({
+      class_name: a.className, root_path: a.rootPath || '/root',
+    }));
   }
 
   private async handleGameReparentNode(args: any) {
-    if (!this.activeProcess) return createErrorResponse('No active Godot process. Use run_project first.');
-    if (!this.gameConnection.connected) return createErrorResponse('Not connected to game interaction server.');
-
     args = normalizeParameters(args || {});
-    if (!args.nodePath || !args.newParentPath) {
-      return createErrorResponse('nodePath and newParentPath are required.');
-    }
-
-    try {
-      const response = await this.sendGameCommand('reparent_node', {
-        node_path: args.nodePath,
-        new_parent_path: args.newParentPath,
-        keep_global_transform: args.keepGlobalTransform !== false,
-      });
-      if (response.error) return createErrorResponse(`Reparent node failed: ${response.error}`);
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
-    } catch (error: any) {
-      return createErrorResponse(`Reparent node failed: ${error?.message || 'Unknown error'}`);
-    }
+    if (!args.nodePath || !args.newParentPath) return createErrorResponse('nodePath and newParentPath are required.');
+    return this.gameCommand('reparent_node', args, a => ({
+      node_path: a.nodePath, new_parent_path: a.newParentPath, keep_global_transform: a.keepGlobalTransform !== false,
+    }));
   }
-
-  // ==================== Headless Resource Handlers ====================
 
   private async handleAttachScript(args: any) {
     args = normalizeParameters(args || {});
-    if (!args.projectPath || !args.scenePath || !args.nodePath || !args.scriptPath) {
+    if (!args.projectPath || !args.scenePath || !args.nodePath || !args.scriptPath)
       return createErrorResponse('projectPath, scenePath, nodePath, and scriptPath are required.');
-    }
-
-    if (!validatePath(args.projectPath) || !validatePath(args.scenePath) || !validatePath(args.scriptPath)) {
-      return createErrorResponse('Invalid path.');
-    }
-
-    const projectFile = join(args.projectPath, 'project.godot');
-    if (!existsSync(projectFile)) {
-      return createErrorResponse(`Not a valid Godot project: ${args.projectPath}`);
-    }
-
-    const scenePath = join(args.projectPath, args.scenePath);
-    if (!existsSync(scenePath)) {
-      return createErrorResponse(`Scene file does not exist: ${args.scenePath}`);
-    }
-
-    const scriptPath = join(args.projectPath, args.scriptPath);
-    if (!existsSync(scriptPath)) {
-      return createErrorResponse(`Script file does not exist: ${args.scriptPath}`);
-    }
-
-    try {
-      const { stdout, stderr } = await this.executeOperation('attach_script', {
-        scenePath: args.scenePath,
-        nodePath: args.nodePath,
-        scriptPath: args.scriptPath,
-      }, args.projectPath);
-
-      if (stderr && stderr.includes('Failed to')) {
-        return createErrorResponse(`Failed to attach script: ${stderr}`);
-      }
-
-      return {
-        content: [{ type: 'text', text: `Script attached successfully.\n\nOutput: ${stdout}` }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Failed to attach script: ${error?.message || 'Unknown error'}`);
-    }
+    return this.headlessOp('attach_script', args, a => ({
+      projectPath: a.projectPath,
+      params: { scenePath: a.scenePath, nodePath: a.nodePath, scriptPath: a.scriptPath },
+    }));
   }
 
   private async handleCreateResource(args: any) {
     args = normalizeParameters(args || {});
-    if (!args.projectPath || !args.resourceType || !args.resourcePath) {
+    if (!args.projectPath || !args.resourceType || !args.resourcePath)
       return createErrorResponse('projectPath, resourceType, and resourcePath are required.');
-    }
-
-    if (!validatePath(args.projectPath) || !validatePath(args.resourcePath)) {
-      return createErrorResponse('Invalid path.');
-    }
-
-    const projectFile = join(args.projectPath, 'project.godot');
-    if (!existsSync(projectFile)) {
-      return createErrorResponse(`Not a valid Godot project: ${args.projectPath}`);
-    }
-
-    try {
-      const params: any = {
-        resourceType: args.resourceType,
-        resourcePath: args.resourcePath,
-      };
-      if (args.properties) {
-        params.properties = args.properties;
-      }
-
-      const { stdout, stderr } = await this.executeOperation('create_resource', params, args.projectPath);
-
-      if (stderr && stderr.includes('Failed to')) {
-        return createErrorResponse(`Failed to create resource: ${stderr}`);
-      }
-
-      return {
-        content: [{ type: 'text', text: `Resource created successfully.\n\nOutput: ${stdout}` }],
-      };
-    } catch (error: any) {
-      return createErrorResponse(`Failed to create resource: ${error?.message || 'Unknown error'}`);
-    }
+    return this.headlessOp('create_resource', args, a => ({
+      projectPath: a.projectPath,
+      params: { resourceType: a.resourceType, resourcePath: a.resourcePath, ...(a.properties ? { properties: a.properties } : {}) },
+    }));
   }
 
   /**
