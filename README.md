@@ -5,7 +5,7 @@
 [![](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white 'TypeScript')](https://www.typescriptlang.org/)
 [![](https://img.shields.io/badge/License-MIT-red.svg 'MIT License')](https://opensource.org/licenses/MIT)
 
-A comprehensive [Model Context Protocol](https://modelcontextprotocol.io/introduction) (MCP) server that gives AI assistants **full control** over the Godot game engine. **47 tools** spanning runtime code execution, property inspection, scene manipulation, animation control, signal management, tweening, project settings, and more.
+A comprehensive [Model Context Protocol](https://modelcontextprotocol.io/introduction) (MCP) server that gives AI assistants **full control** over the Godot game engine. **67 tools** spanning file I/O, runtime code execution, property inspection, scene manipulation, animation control, signal management, tweening, project creation, camera control, physics raycasting, and more.
 
 ## Acknowledgments
 
@@ -13,7 +13,7 @@ This project is built upon and extends [godot-mcp](https://github.com/Coding-Sol
 
 ## What's New (Improvements Over Original)
 
-The original godot-mcp provided 20 tools for basic project management and scene creation. This fork extends it to **47 tools** with the following major additions:
+The original godot-mcp provided 20 tools for basic project management and scene creation. This fork extends it to **67 tools** with the following major additions:
 
 ### Runtime Code Execution
 - **`game_eval`** - Execute arbitrary GDScript code in the running game with return values
@@ -57,6 +57,32 @@ The original godot-mcp provided 20 tools for basic project management and scene 
 - **`modify_project_settings`** - Change project settings programmatically
 - **`list_project_files`** - List and filter project files by extension
 
+### File I/O
+- **`read_file`** / **`write_file`** / **`delete_file`** - Full file system access within Godot projects
+- **`create_directory`** - Create directory structures for scripts, scenes, assets
+
+### Error & Log Capture
+- **`game_get_errors`** - Get new push_error/push_warning messages since last call
+- **`game_get_logs`** - Get new print output from the running game since last call
+
+### Enhanced Input
+- **`game_key_hold`** / **`game_key_release`** - Hold keys down for movement testing (WASD etc.)
+- **`game_scroll`** - Mouse scroll wheel events
+- **`game_mouse_drag`** - Drag between two points over multiple frames
+- **`game_gamepad`** - Gamepad button and axis input events
+
+### Project Creation & Configuration
+- **`create_project`** - Create a new Godot project from scratch
+- **`manage_autoloads`** - Add, remove, or list autoloads
+- **`manage_input_map`** - Add, remove, or list input actions and key bindings
+- **`manage_export_presets`** - Create or modify export preset configuration
+
+### Camera, Physics & Audio
+- **`game_get_camera`** / **`game_set_camera`** - Query and control 2D/3D cameras
+- **`game_raycast`** - Cast physics rays (auto-detects 2D vs 3D)
+- **`game_get_audio`** - Get audio bus layout and playing streams
+- **`game_spawn_node`** - Create any node type at runtime with properties
+
 ### Robustness Improvements
 - **Reentrancy guard** - Prevents concurrent command processing during async operations
 - **Full type conversion** - Supports Vector2/3, Color, Quaternion, Basis, Transform2D/3D, AABB, Rect2, and all packed array types
@@ -64,7 +90,7 @@ The original godot-mcp provided 20 tools for basic project management and scene 
 - **PackedArray serialization** - Proper JSON arrays instead of string fallback
 - **Graceful error handling** - Scene read fallback to raw .tscn text on missing dependencies
 
-## All 47 Tools
+## All 67 Tools
 
 ### Project Management (7 tools)
 | Tool | Description |
@@ -156,6 +182,46 @@ The original godot-mcp provided 20 tools for basic project management and scene 
 | `game_wait` | Wait N frames |
 | `game_get_nodes_in_group` | Query nodes by group |
 | `game_find_nodes_by_class` | Find nodes by class type |
+
+### File I/O (4 tools)
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read a text file from a Godot project |
+| `write_file` | Create or overwrite a text file |
+| `delete_file` | Delete a file from a project |
+| `create_directory` | Create a directory inside a project |
+
+### Error & Log Capture (2 tools)
+| Tool | Description |
+|------|-------------|
+| `game_get_errors` | Get new errors/warnings since last call |
+| `game_get_logs` | Get new print output since last call |
+
+### Enhanced Input (5 tools)
+| Tool | Description |
+|------|-------------|
+| `game_key_hold` | Hold a key down (no auto-release) |
+| `game_key_release` | Release a held key |
+| `game_scroll` | Mouse scroll wheel event |
+| `game_mouse_drag` | Drag between two points over N frames |
+| `game_gamepad` | Gamepad button or axis input |
+
+### Project Creation (4 tools)
+| Tool | Description |
+|------|-------------|
+| `create_project` | Create a new Godot project from scratch |
+| `manage_autoloads` | Add, remove, or list autoloads |
+| `manage_input_map` | Add, remove, or list input actions |
+| `manage_export_presets` | Create or modify export presets |
+
+### Advanced Runtime (5 tools)
+| Tool | Description |
+|------|-------------|
+| `game_get_camera` | Get active camera position/rotation/zoom |
+| `game_set_camera` | Move or rotate the active camera |
+| `game_raycast` | Cast a ray and return collision results |
+| `game_get_audio` | Get audio bus layout and playing streams |
+| `game_spawn_node` | Create a new node of any type at runtime |
 
 ## Requirements
 
@@ -261,13 +327,13 @@ The server uses two communication channels:
 
 ## Testing
 
-The project uses [Vitest](https://vitest.dev/) with 191 tests across 3 files:
+The project uses [Vitest](https://vitest.dev/) with 246 tests across 3 files:
 
 | File | Tests | What it covers |
 |------|-------|----------------|
-| `tests/utils.test.ts` | 30 | Parameter mappings, normalization, path validation, error responses, version detection |
-| `tests/tool-definitions.test.ts` | 55 | All 47 tools defined, schemas valid, names unique, descriptions < 80 chars |
-| `tests/handlers.test.ts` | 106 | Game command arg transforms, required-param validation, headless op path checks, source structure |
+| `tests/utils.test.ts` | 31 | Parameter mappings, normalization, path validation, error responses, version detection |
+| `tests/tool-definitions.test.ts` | 75 | All 67 tools defined, schemas valid, names unique, descriptions < 80 chars |
+| `tests/handlers.test.ts` | 140 | Game command arg transforms, required-param validation, headless op path checks, source structure |
 
 ```bash
 npm test          # run once
@@ -300,6 +366,16 @@ npm run test:watch  # watch mode
 "Pause the game and take a screenshot"
 
 "Find all CharacterBody3D nodes in the scene"
+
+"Create a new Godot project called 'MyGame' and write a player script"
+
+"Hold down the W key for 2 seconds to test walking"
+
+"Cast a ray from the player downward to check for ground"
+
+"Get the camera position and move it to look at the player"
+
+"Show me the latest error messages from the running game"
 ```
 
 ## License
@@ -309,4 +385,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Credits
 
 - **Original project**: [godot-mcp](https://github.com/Coding-Solo/godot-mcp) by [Solomon Elias (Coding-Solo)](https://github.com/Coding-Solo) - provided the foundational MCP server architecture, headless operations system, and TCP interaction framework
-- **Extended by**: [Tugcan Topaloglu](https://github.com/tugcantopaloglu) - added 27 new tools for runtime code execution, node manipulation, signals, animation, tweening, project management, and comprehensive type conversion
+- **Extended by**: [Tugcan Topaloglu](https://github.com/tugcantopaloglu) - added 47 new tools for file I/O, runtime code execution, node manipulation, signals, animation, tweening, project creation, camera control, physics raycasting, enhanced input, and comprehensive type conversion

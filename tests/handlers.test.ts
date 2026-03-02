@@ -400,6 +400,171 @@ describe('Game command handlers — argument transforms', () => {
     });
   });
 
+  // game_key_hold
+  describe('handleGameKeyHold', () => {
+    it('passes key parameter', () => {
+      const r = fakeGameCommand(true, true, { key: 'W' }, a => ({ key: a.key }));
+      expect(r.commandArgs).toEqual({ key: 'W' });
+    });
+
+    it('passes action parameter', () => {
+      const r = fakeGameCommand(true, true, { action: 'move_forward' }, a => ({ action: a.action }));
+      expect(r.commandArgs).toEqual({ action: 'move_forward' });
+    });
+  });
+
+  // game_key_release
+  describe('handleGameKeyRelease', () => {
+    it('passes key parameter', () => {
+      const r = fakeGameCommand(true, true, { key: 'W' }, a => ({ key: a.key }));
+      expect(r.commandArgs).toEqual({ key: 'W' });
+    });
+  });
+
+  // game_scroll
+  describe('handleGameScroll', () => {
+    const argsFn = (a: any) => ({
+      x: a.x ?? 0, y: a.y ?? 0, direction: a.direction || 'up', amount: a.amount || 1,
+    });
+
+    it('defaults direction to up and amount to 1', () => {
+      const r = fakeGameCommand(true, true, { x: 100, y: 200 }, argsFn);
+      expect(r.commandArgs).toEqual({ x: 100, y: 200, direction: 'up', amount: 1 });
+    });
+
+    it('accepts custom direction and amount', () => {
+      const r = fakeGameCommand(true, true, { x: 0, y: 0, direction: 'down', amount: 3 }, argsFn);
+      expect(r.commandArgs!.direction).toBe('down');
+      expect(r.commandArgs!.amount).toBe(3);
+    });
+  });
+
+  // game_mouse_drag
+  describe('handleGameMouseDrag', () => {
+    const argsFn = (a: any) => ({
+      from_x: a.fromX, from_y: a.fromY, to_x: a.toX, to_y: a.toY,
+      button: a.button || 1, steps: a.steps || 10,
+    });
+
+    it('maps all drag params', () => {
+      const r = fakeGameCommand(true, true, {
+        fromX: 10, fromY: 20, toX: 100, toY: 200,
+      }, argsFn);
+      expect(r.commandArgs).toEqual({
+        from_x: 10, from_y: 20, to_x: 100, to_y: 200, button: 1, steps: 10,
+      });
+    });
+
+    it('accepts custom button and steps', () => {
+      const r = fakeGameCommand(true, true, {
+        fromX: 0, fromY: 0, toX: 50, toY: 50, button: 2, steps: 20,
+      }, argsFn);
+      expect(r.commandArgs!.button).toBe(2);
+      expect(r.commandArgs!.steps).toBe(20);
+    });
+  });
+
+  // game_gamepad
+  describe('handleGameGamepad', () => {
+    const argsFn = (a: any) => ({
+      type: a.type, index: a.index, value: a.value, device: a.device || 0,
+    });
+
+    it('passes button type', () => {
+      const r = fakeGameCommand(true, true, { type: 'button', index: 0, value: 1 }, argsFn);
+      expect(r.commandArgs).toEqual({ type: 'button', index: 0, value: 1, device: 0 });
+    });
+
+    it('passes axis type with custom device', () => {
+      const r = fakeGameCommand(true, true, { type: 'axis', index: 1, value: -0.5, device: 2 }, argsFn);
+      expect(r.commandArgs!.device).toBe(2);
+    });
+  });
+
+  // game_get_camera (no args)
+  describe('handleGameGetCamera', () => {
+    it('sends empty args', () => {
+      const r = fakeGameCommand(true, true, {}, () => ({}));
+      expect(r.commandArgs).toEqual({});
+    });
+  });
+
+  // game_set_camera
+  describe('handleGameSetCamera', () => {
+    it('passes position', () => {
+      const r = fakeGameCommand(true, true, { position: { x: 10, y: 20 } }, a => ({
+        ...(a.position ? { position: a.position } : {}),
+      }));
+      expect(r.commandArgs).toEqual({ position: { x: 10, y: 20 } });
+    });
+
+    it('omits undefined fields', () => {
+      const r = fakeGameCommand(true, true, {}, a => ({
+        ...(a.position ? { position: a.position } : {}),
+        ...(a.fov !== undefined ? { fov: a.fov } : {}),
+      }));
+      expect(r.commandArgs).toEqual({});
+    });
+  });
+
+  // game_raycast
+  describe('handleGameRaycast', () => {
+    const argsFn = (a: any) => ({
+      from: a.from, to: a.to, collision_mask: a.collisionMask ?? 0xFFFFFFFF,
+    });
+
+    it('passes from/to with default mask', () => {
+      const r = fakeGameCommand(true, true, {
+        from: { x: 0, y: 0 }, to: { x: 100, y: 100 },
+      }, argsFn);
+      expect(r.commandArgs).toEqual({
+        from: { x: 0, y: 0 }, to: { x: 100, y: 100 }, collision_mask: 0xFFFFFFFF,
+      });
+    });
+
+    it('accepts custom collision mask', () => {
+      const r = fakeGameCommand(true, true, {
+        from: { x: 0, y: 0 }, to: { x: 10, y: 10 }, collisionMask: 1,
+      }, argsFn);
+      expect(r.commandArgs!.collision_mask).toBe(1);
+    });
+  });
+
+  // game_get_audio (no args)
+  describe('handleGameGetAudio', () => {
+    it('sends empty args', () => {
+      const r = fakeGameCommand(true, true, {}, () => ({}));
+      expect(r.commandArgs).toEqual({});
+    });
+  });
+
+  // game_spawn_node
+  describe('handleGameSpawnNode', () => {
+    const argsFn = (a: any) => ({
+      type: a.type, name: a.name || '', parent_path: a.parentPath || '/root',
+      ...(a.properties ? { properties: a.properties } : {}),
+    });
+
+    it('defaults name to empty and parent to /root', () => {
+      const r = fakeGameCommand(true, true, { type: 'Sprite2D' }, argsFn);
+      expect(r.commandArgs).toEqual({ type: 'Sprite2D', name: '', parent_path: '/root' });
+    });
+
+    it('accepts custom name and parent', () => {
+      const r = fakeGameCommand(true, true, {
+        type: 'Node2D', name: 'MyNode', parentPath: '/root/World',
+      }, argsFn);
+      expect(r.commandArgs).toEqual({ type: 'Node2D', name: 'MyNode', parent_path: '/root/World' });
+    });
+
+    it('includes properties when provided', () => {
+      const r = fakeGameCommand(true, true, {
+        type: 'Sprite2D', properties: { visible: false },
+      }, argsFn);
+      expect(r.commandArgs!.properties).toEqual({ visible: false });
+    });
+  });
+
   // game_reparent_node
   describe('handleGameReparentNode', () => {
     const argsFn = (a: any) => ({
@@ -532,6 +697,76 @@ describe('Handler required-parameter validation', () => {
   it('game_reparent_node requires nodePath and newParentPath', () => {
     const args = normalizeParameters({ nodePath: '/root/P' });
     expect(!args.nodePath || !args.newParentPath).toBe(true);
+  });
+
+  it('read_file requires projectPath and filePath', () => {
+    const args = normalizeParameters({ projectPath: '/game' });
+    expect(!args.projectPath || !args.filePath).toBe(true);
+  });
+
+  it('write_file requires projectPath, filePath, and content', () => {
+    const args = normalizeParameters({ projectPath: '/game', filePath: 'test.gd' });
+    expect(args.content === undefined).toBe(true);
+  });
+
+  it('delete_file requires projectPath and filePath', () => {
+    const args = normalizeParameters({});
+    expect(!args.projectPath || !args.filePath).toBe(true);
+  });
+
+  it('create_directory requires projectPath and directoryPath', () => {
+    const args = normalizeParameters({ projectPath: '/game' });
+    expect(!args.projectPath || !args.directoryPath).toBe(true);
+  });
+
+  it('game_key_hold requires key or action', () => {
+    const args = normalizeParameters({});
+    expect(!args.key && !args.action).toBe(true);
+  });
+
+  it('game_key_release requires key or action', () => {
+    const args = {};
+    expect(!(args as any).key && !(args as any).action).toBe(true);
+  });
+
+  it('game_mouse_drag requires fromX, fromY, toX, toY', () => {
+    const args = normalizeParameters({ fromX: 10 });
+    expect(args.toX === undefined || args.toY === undefined).toBe(true);
+  });
+
+  it('game_gamepad requires type, index, and value', () => {
+    const args = normalizeParameters({ type: 'button' });
+    expect(args.index === undefined || args.value === undefined).toBe(true);
+  });
+
+  it('create_project requires projectPath and projectName', () => {
+    const args = normalizeParameters({ projectPath: '/game' });
+    expect(!args.projectPath || !args.projectName).toBe(true);
+  });
+
+  it('manage_autoloads requires projectPath and action', () => {
+    const args = normalizeParameters({ projectPath: '/game' });
+    expect(!args.projectPath || !args.action).toBe(true);
+  });
+
+  it('manage_input_map requires projectPath and action', () => {
+    const args = normalizeParameters({});
+    expect(!args.projectPath || !args.action).toBe(true);
+  });
+
+  it('manage_export_presets requires projectPath and action', () => {
+    const args = normalizeParameters({});
+    expect(!args.projectPath || !args.action).toBe(true);
+  });
+
+  it('game_raycast requires from and to', () => {
+    const args = normalizeParameters({ from: { x: 0, y: 0 } });
+    expect(!args.from || !args.to).toBe(true);
+  });
+
+  it('game_spawn_node requires type', () => {
+    const args = normalizeParameters({});
+    expect(!args.type).toBe(true);
   });
 });
 
@@ -730,6 +965,12 @@ describe('Handler source structure', () => {
       'handleGameWait', 'handleGameConnectSignal', 'handleGameDisconnectSignal',
       'handleGameEmitSignal', 'handleGamePlayAnimation', 'handleGameTweenProperty',
       'handleGameGetNodesInGroup', 'handleGameFindNodesByClass', 'handleGameReparentNode',
+      // New game handlers
+      'handleGameGetErrors', 'handleGameGetLogs',
+      'handleGameKeyHold', 'handleGameKeyRelease', 'handleGameScroll',
+      'handleGameMouseDrag', 'handleGameGamepad',
+      'handleGameGetCamera', 'handleGameSetCamera', 'handleGameRaycast',
+      'handleGameGetAudio', 'handleGameSpawnNode',
     ];
     for (const h of gameHandlers) {
       expect(sourceCode).toContain(h);
@@ -742,6 +983,25 @@ describe('Handler source structure', () => {
       'handleAttachScript', 'handleCreateResource',
     ];
     for (const h of headlessHandlers) {
+      expect(sourceCode).toContain(h);
+    }
+  });
+
+  it('all file I/O handlers exist', () => {
+    const fileHandlers = [
+      'handleReadFile', 'handleWriteFile', 'handleDeleteFile', 'handleCreateDirectory',
+    ];
+    for (const h of fileHandlers) {
+      expect(sourceCode).toContain(h);
+    }
+  });
+
+  it('all project management handlers exist', () => {
+    const pmHandlers = [
+      'handleCreateProject', 'handleManageAutoloads',
+      'handleManageInputMap', 'handleManageExportPresets',
+    ];
+    for (const h of pmHandlers) {
       expect(sourceCode).toContain(h);
     }
   });
@@ -929,8 +1189,8 @@ describe('Tool dispatch switch statement', () => {
   it('every case returns await this.handle*', () => {
     const caseRegex = /case '(\w+)':\s*\n\s*return await this\.handle/g;
     const matches = [...sourceCode.matchAll(caseRegex)];
-    // Should match all 47 tools
-    expect(matches.length).toBe(47);
+    // Should match all 67 tools
+    expect(matches.length).toBe(67);
   });
 
   it('no case falls through without return', () => {

@@ -12,6 +12,7 @@ var _busy_since: float = 0.0
 const PORT: int = 9090
 const BUSY_TIMEOUT: float = 30.0
 var _key_map: Dictionary
+var _held_keys: Dictionary = {}
 
 func _ready() -> void:
 	# Ensure MCP server keeps processing even when game is paused
@@ -154,6 +155,28 @@ func _handle_command(json_str: String) -> void:
 			_cmd_find_nodes_by_class(params)
 		"reparent_node":
 			_cmd_reparent_node(params)
+		# Enhanced input commands
+		"key_hold":
+			_cmd_key_hold(params)
+		"key_release":
+			_cmd_key_release(params)
+		"scroll":
+			_cmd_scroll(params)
+		"mouse_drag":
+			await _cmd_mouse_drag(params)
+		"gamepad":
+			_cmd_gamepad(params)
+		# Advanced runtime commands
+		"get_camera":
+			_cmd_get_camera()
+		"set_camera":
+			_cmd_set_camera(params)
+		"raycast":
+			await _cmd_raycast(params)
+		"get_audio":
+			_cmd_get_audio()
+		"spawn_node":
+			_cmd_spawn_node(params)
 		_:
 			_send_response({"error": "Unknown command: %s" % command})
 
@@ -1061,6 +1084,357 @@ func _cmd_reparent_node(params: Dictionary) -> void:
 	var keep_global: bool = params.get("keep_global_transform", true)
 	node.reparent(new_parent, keep_global)
 	_send_response({"success": true, "node": node.name, "new_parent": new_parent_path, "new_path": str(node.get_path())})
+
+
+# --- Key Hold (no auto-release) ---
+func _cmd_key_hold(params: Dictionary) -> void:
+	var action: String = params.get("action", "")
+	var key: String = params.get("key", "")
+
+	if action.length() > 0:
+		Input.action_press(action)
+		_held_keys["action:" + action] = true
+		_send_response({"success": true, "held": action, "type": "action"})
+		return
+
+	if key.length() > 0:
+		var keycode: int = _string_to_keycode(key)
+		if keycode == KEY_NONE:
+			_send_response({"error": "Unknown key: %s" % key})
+			return
+		var event: InputEventKey = InputEventKey.new()
+		event.keycode = keycode as Key
+		event.physical_keycode = keycode as Key
+		event.pressed = true
+		Input.parse_input_event(event)
+		_held_keys["key:" + key.to_upper()] = keycode
+		_send_response({"success": true, "held": key, "type": "key"})
+		return
+
+	_send_response({"error": "Must provide 'key' or 'action' parameter"})
+
+
+# --- Key Release ---
+func _cmd_key_release(params: Dictionary) -> void:
+	var action: String = params.get("action", "")
+	var key: String = params.get("key", "")
+
+	if action.length() > 0:
+		Input.action_release(action)
+		_held_keys.erase("action:" + action)
+		_send_response({"success": true, "released": action, "type": "action"})
+		return
+
+	if key.length() > 0:
+		var keycode: int = _string_to_keycode(key)
+		if keycode == KEY_NONE:
+			_send_response({"error": "Unknown key: %s" % key})
+			return
+		var event: InputEventKey = InputEventKey.new()
+		event.keycode = keycode as Key
+		event.physical_keycode = keycode as Key
+		event.pressed = false
+		Input.parse_input_event(event)
+		_held_keys.erase("key:" + key.to_upper())
+		_send_response({"success": true, "released": key, "type": "key"})
+		return
+
+	_send_response({"error": "Must provide 'key' or 'action' parameter"})
+
+
+# --- Scroll ---
+func _cmd_scroll(params: Dictionary) -> void:
+	var x: float = float(params.get("x", 0))
+	var y: float = float(params.get("y", 0))
+	var direction: String = params.get("direction", "up")
+	var amount: int = int(params.get("amount", 1))
+
+	var button_index: int = MOUSE_BUTTON_WHEEL_UP
+	match direction:
+		"down":
+			button_index = MOUSE_BUTTON_WHEEL_DOWN
+		"left":
+			button_index = MOUSE_BUTTON_WHEEL_LEFT
+		"right":
+			button_index = MOUSE_BUTTON_WHEEL_RIGHT
+
+	for i in amount:
+		var press_event: InputEventMouseButton = InputEventMouseButton.new()
+		press_event.position = Vector2(x, y)
+		press_event.global_position = Vector2(x, y)
+		press_event.button_index = button_index as MouseButton
+		press_event.pressed = true
+		press_event.factor = 1.0
+		Input.parse_input_event(press_event)
+
+		var release_event: InputEventMouseButton = InputEventMouseButton.new()
+		release_event.position = Vector2(x, y)
+		release_event.global_position = Vector2(x, y)
+		release_event.button_index = button_index as MouseButton
+		release_event.pressed = false
+		Input.parse_input_event(release_event)
+
+	_send_response({"success": true, "direction": direction, "amount": amount, "position": {"x": x, "y": y}})
+
+
+# --- Mouse Drag ---
+func _cmd_mouse_drag(params: Dictionary) -> void:
+	var from_x: float = float(params.get("from_x", 0))
+	var from_y: float = float(params.get("from_y", 0))
+	var to_x: float = float(params.get("to_x", 0))
+	var to_y: float = float(params.get("to_y", 0))
+	var button: int = int(params.get("button", MOUSE_BUTTON_LEFT))
+	var steps: int = int(params.get("steps", 10))
+	if steps < 1:
+		steps = 1
+
+	var from_pos: Vector2 = Vector2(from_x, from_y)
+	var to_pos: Vector2 = Vector2(to_x, to_y)
+
+	# Press at start position
+	var press_event: InputEventMouseButton = InputEventMouseButton.new()
+	press_event.position = from_pos
+	press_event.global_position = from_pos
+	press_event.button_index = button as MouseButton
+	press_event.pressed = true
+	Input.parse_input_event(press_event)
+
+	# Lerp position over steps frames
+	for i in steps:
+		await get_tree().process_frame
+		var t: float = float(i + 1) / float(steps)
+		var current_pos: Vector2 = from_pos.lerp(to_pos, t)
+		var move_event: InputEventMouseMotion = InputEventMouseMotion.new()
+		move_event.position = current_pos
+		move_event.global_position = current_pos
+		move_event.relative = (to_pos - from_pos) / float(steps)
+		move_event.button_mask = MOUSE_BUTTON_MASK_LEFT if button == MOUSE_BUTTON_LEFT else 0
+		Input.parse_input_event(move_event)
+
+	# Release at end position
+	var release_event: InputEventMouseButton = InputEventMouseButton.new()
+	release_event.position = to_pos
+	release_event.global_position = to_pos
+	release_event.button_index = button as MouseButton
+	release_event.pressed = false
+	Input.parse_input_event(release_event)
+
+	_send_response({"success": true, "from": {"x": from_x, "y": from_y}, "to": {"x": to_x, "y": to_y}, "steps": steps})
+
+
+# --- Gamepad ---
+func _cmd_gamepad(params: Dictionary) -> void:
+	var input_type: String = params.get("type", "button")
+	var index: int = int(params.get("index", 0))
+	var value: float = float(params.get("value", 0))
+	var device: int = int(params.get("device", 0))
+
+	if input_type == "button":
+		var event: InputEventJoypadButton = InputEventJoypadButton.new()
+		event.device = device
+		event.button_index = index as JoyButton
+		event.pressed = value > 0.5
+		event.pressure = value
+		Input.parse_input_event(event)
+		_send_response({"success": true, "type": "button", "index": index, "pressed": event.pressed, "device": device})
+	elif input_type == "axis":
+		var event: InputEventJoypadMotion = InputEventJoypadMotion.new()
+		event.device = device
+		event.axis = index as JoyAxis
+		event.axis_value = value
+		Input.parse_input_event(event)
+		_send_response({"success": true, "type": "axis", "index": index, "value": value, "device": device})
+	else:
+		_send_response({"error": "Invalid type: %s. Use 'button' or 'axis'" % input_type})
+
+
+# --- Get Camera ---
+func _cmd_get_camera() -> void:
+	var result: Dictionary = {"success": true}
+
+	var cam2d: Camera2D = get_viewport().get_camera_2d()
+	if cam2d != null:
+		result["camera_2d"] = {
+			"position": {"x": cam2d.global_position.x, "y": cam2d.global_position.y},
+			"rotation": cam2d.global_rotation,
+			"zoom": {"x": cam2d.zoom.x, "y": cam2d.zoom.y},
+			"path": str(cam2d.get_path())
+		}
+
+	var cam3d: Camera3D = get_viewport().get_camera_3d()
+	if cam3d != null:
+		result["camera_3d"] = {
+			"position": {"x": cam3d.global_position.x, "y": cam3d.global_position.y, "z": cam3d.global_position.z},
+			"rotation": {"x": rad_to_deg(cam3d.global_rotation.x), "y": rad_to_deg(cam3d.global_rotation.y), "z": rad_to_deg(cam3d.global_rotation.z)},
+			"fov": cam3d.fov,
+			"path": str(cam3d.get_path())
+		}
+
+	if cam2d == null and cam3d == null:
+		result["error"] = "No active camera found"
+		result["success"] = false
+
+	_send_response(result)
+
+
+# --- Set Camera ---
+func _cmd_set_camera(params: Dictionary) -> void:
+	var cam2d: Camera2D = get_viewport().get_camera_2d()
+	var cam3d: Camera3D = get_viewport().get_camera_3d()
+
+	if cam2d == null and cam3d == null:
+		_send_response({"error": "No active camera found"})
+		return
+
+	if cam2d != null:
+		if params.has("position"):
+			var pos: Dictionary = params["position"]
+			cam2d.global_position = Vector2(float(pos.get("x", cam2d.global_position.x)), float(pos.get("y", cam2d.global_position.y)))
+		if params.has("rotation"):
+			var rot: Dictionary = params["rotation"]
+			cam2d.global_rotation = deg_to_rad(float(rot.get("z", rad_to_deg(cam2d.global_rotation))))
+		if params.has("zoom"):
+			var z: Dictionary = params["zoom"]
+			cam2d.zoom = Vector2(float(z.get("x", cam2d.zoom.x)), float(z.get("y", cam2d.zoom.y)))
+		_send_response({"success": true, "camera": "2d", "position": _variant_to_json(cam2d.global_position), "zoom": _variant_to_json(cam2d.zoom)})
+		return
+
+	if cam3d != null:
+		if params.has("position"):
+			var pos: Dictionary = params["position"]
+			cam3d.global_position = Vector3(float(pos.get("x", cam3d.global_position.x)), float(pos.get("y", cam3d.global_position.y)), float(pos.get("z", cam3d.global_position.z)))
+		if params.has("rotation"):
+			var rot: Dictionary = params["rotation"]
+			cam3d.global_rotation = Vector3(deg_to_rad(float(rot.get("x", rad_to_deg(cam3d.global_rotation.x)))), deg_to_rad(float(rot.get("y", rad_to_deg(cam3d.global_rotation.y)))), deg_to_rad(float(rot.get("z", rad_to_deg(cam3d.global_rotation.z)))))
+		if params.has("fov"):
+			cam3d.fov = float(params["fov"])
+		_send_response({"success": true, "camera": "3d", "position": _variant_to_json(cam3d.global_position), "rotation": _variant_to_json(cam3d.global_rotation)})
+		return
+
+
+# --- Raycast ---
+func _cmd_raycast(params: Dictionary) -> void:
+	var from_dict: Dictionary = params.get("from", {})
+	var to_dict: Dictionary = params.get("to", {})
+	var collision_mask: int = int(params.get("collision_mask", 0xFFFFFFFF))
+
+	# Determine 2D vs 3D based on whether z is present
+	var is_3d: bool = from_dict.has("z") or to_dict.has("z")
+
+	if is_3d:
+		var from_pos: Vector3 = Vector3(float(from_dict.get("x", 0)), float(from_dict.get("y", 0)), float(from_dict.get("z", 0)))
+		var to_pos: Vector3 = Vector3(float(to_dict.get("x", 0)), float(to_dict.get("y", 0)), float(to_dict.get("z", 0)))
+
+		# Wait a frame to ensure physics state is available
+		await get_tree().process_frame
+
+		var space_state: PhysicsDirectSpaceState3D = get_viewport().world_3d.direct_space_state
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from_pos, to_pos, collision_mask)
+		var result: Dictionary = space_state.intersect_ray(query)
+
+		if result.is_empty():
+			_send_response({"success": true, "hit": false, "mode": "3d"})
+		else:
+			_send_response({
+				"success": true, "hit": true, "mode": "3d",
+				"position": _variant_to_json(result["position"]),
+				"normal": _variant_to_json(result["normal"]),
+				"collider_path": str(result["collider"].get_path()) if result.has("collider") and result["collider"] is Node else "",
+				"collider_class": result["collider"].get_class() if result.has("collider") else "",
+			})
+	else:
+		var from_pos: Vector2 = Vector2(float(from_dict.get("x", 0)), float(from_dict.get("y", 0)))
+		var to_pos: Vector2 = Vector2(float(to_dict.get("x", 0)), float(to_dict.get("y", 0)))
+
+		await get_tree().process_frame
+
+		var space_state: PhysicsDirectSpaceState2D = get_viewport().world_2d.direct_space_state
+		var query: PhysicsRayQueryParameters2D = PhysicsRayQueryParameters2D.create(from_pos, to_pos, collision_mask)
+		var result: Dictionary = space_state.intersect_ray(query)
+
+		if result.is_empty():
+			_send_response({"success": true, "hit": false, "mode": "2d"})
+		else:
+			_send_response({
+				"success": true, "hit": true, "mode": "2d",
+				"position": _variant_to_json(result["position"]),
+				"normal": _variant_to_json(result["normal"]),
+				"collider_path": str(result["collider"].get_path()) if result.has("collider") and result["collider"] is Node else "",
+				"collider_class": result["collider"].get_class() if result.has("collider") else "",
+			})
+
+
+# --- Get Audio ---
+func _cmd_get_audio() -> void:
+	var buses: Array = []
+	for i in AudioServer.bus_count:
+		buses.append({
+			"name": AudioServer.get_bus_name(i),
+			"volume_db": AudioServer.get_bus_volume_db(i),
+			"mute": AudioServer.is_bus_mute(i),
+			"solo": AudioServer.is_bus_solo(i),
+		})
+
+	var players: Array = []
+	_find_audio_players(get_tree().root, players)
+
+	_send_response({"success": true, "buses": buses, "players": players})
+
+
+func _find_audio_players(node: Node, results: Array) -> void:
+	if node is AudioStreamPlayer:
+		var p: AudioStreamPlayer = node as AudioStreamPlayer
+		results.append({"path": str(p.get_path()), "type": "AudioStreamPlayer", "playing": p.playing, "bus": p.bus})
+	elif node is AudioStreamPlayer2D:
+		var p: AudioStreamPlayer2D = node as AudioStreamPlayer2D
+		results.append({"path": str(p.get_path()), "type": "AudioStreamPlayer2D", "playing": p.playing, "bus": p.bus})
+	elif node is AudioStreamPlayer3D:
+		var p: AudioStreamPlayer3D = node as AudioStreamPlayer3D
+		results.append({"path": str(p.get_path()), "type": "AudioStreamPlayer3D", "playing": p.playing, "bus": p.bus})
+	for child in node.get_children():
+		_find_audio_players(child, results)
+
+
+# --- Spawn Node ---
+func _cmd_spawn_node(params: Dictionary) -> void:
+	var type_name: String = params.get("type", "")
+	var node_name: String = params.get("name", "")
+	var parent_path: String = params.get("parent_path", "/root")
+
+	if type_name.is_empty():
+		_send_response({"error": "type is required"})
+		return
+
+	if not ClassDB.class_exists(type_name):
+		_send_response({"error": "Unknown class: %s" % type_name})
+		return
+
+	if not ClassDB.is_parent_class(type_name, "Node") and type_name != "Node":
+		_send_response({"error": "Class '%s' is not a Node type" % type_name})
+		return
+
+	var parent: Node = get_tree().root.get_node_or_null(parent_path)
+	if parent == null:
+		_send_response({"error": "Parent node not found: %s" % parent_path})
+		return
+
+	var instance: Node = ClassDB.instantiate(type_name) as Node
+	if instance == null:
+		_send_response({"error": "Failed to instantiate: %s" % type_name})
+		return
+
+	if node_name.length() > 0:
+		instance.name = node_name
+
+	# Apply properties if provided
+	var properties: Dictionary = params.get("properties", {})
+	for prop_name in properties:
+		var raw_value: Variant = properties[prop_name]
+		var value: Variant = _json_to_variant_for_property(instance, prop_name, raw_value)
+		instance.set(prop_name, value)
+
+	parent.add_child(instance)
+	_send_response({"success": true, "name": instance.name, "type": type_name, "path": str(instance.get_path())})
 
 
 func _exit_tree() -> void:

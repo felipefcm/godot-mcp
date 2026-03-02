@@ -26,6 +26,9 @@ describe('PARAMETER_MAPPINGS', () => {
       'class_name', 'root_path', 'new_parent_path', 'keep_global_transform',
       'script_path', 'resource_type', 'resource_path', 'final_value',
       'trans_type', 'ease_type', 'type_hint', 'parent_path',
+      // New mappings
+      'directory_path', 'from_x', 'from_y', 'to_x', 'to_y',
+      'project_name', 'action_name',
     ];
     for (const key of expectedKeys) {
       expect(PARAMETER_MAPPINGS).toHaveProperty(key);
@@ -94,6 +97,23 @@ describe('normalizeParameters', () => {
       nodeName: 'Player',
     });
     expect(result).toEqual({ projectPath: '/foo', nodeName: 'Player' });
+  });
+
+  it('normalizes new parameter mappings', () => {
+    const result = normalizeParameters({
+      directory_path: 'scripts',
+      from_x: 10, from_y: 20,
+      to_x: 100, to_y: 200,
+      project_name: 'MyGame',
+      action_name: 'jump',
+    });
+    expect(result.directoryPath).toBe('scripts');
+    expect(result.fromX).toBe(10);
+    expect(result.fromY).toBe(20);
+    expect(result.toX).toBe(100);
+    expect(result.toY).toBe(200);
+    expect(result.projectName).toBe('MyGame');
+    expect(result.actionName).toBe('jump');
   });
 });
 

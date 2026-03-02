@@ -20,6 +20,16 @@ const ALL_TOOL_NAMES = [
   'game_play_animation', 'game_tween_property', 'game_get_nodes_in_group',
   'game_find_nodes_by_class', 'game_reparent_node', 'attach_script',
   'create_resource',
+  // File I/O tools
+  'read_file', 'write_file', 'delete_file', 'create_directory',
+  // Error/Log capture tools
+  'game_get_errors', 'game_get_logs',
+  // Enhanced input tools
+  'game_key_hold', 'game_key_release', 'game_scroll', 'game_mouse_drag', 'game_gamepad',
+  // Project management tools
+  'create_project', 'manage_autoloads', 'manage_input_map', 'manage_export_presets',
+  // Advanced runtime tools
+  'game_get_camera', 'game_set_camera', 'game_raycast', 'game_get_audio', 'game_spawn_node',
 ];
 
 let sourceCode: string;
@@ -29,8 +39,8 @@ beforeAll(() => {
 });
 
 describe('Tool definitions', () => {
-  it('defines exactly 47 tools', () => {
-    expect(ALL_TOOL_NAMES).toHaveLength(47);
+  it('defines exactly 67 tools', () => {
+    expect(ALL_TOOL_NAMES).toHaveLength(67);
   });
 
   it('all tool names are unique', () => {

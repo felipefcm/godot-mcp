@@ -37,6 +37,13 @@ export const PARAMETER_MAPPINGS: Record<string, string> = {
   'final_value': 'finalValue',
   'trans_type': 'transType',
   'ease_type': 'easeType',
+  'directory_path': 'directoryPath',
+  'from_x': 'fromX',
+  'from_y': 'fromY',
+  'to_x': 'toX',
+  'to_y': 'toY',
+  'project_name': 'projectName',
+  'action_name': 'actionName',
 };
 
 export const REVERSE_PARAMETER_MAPPINGS: Record<string, string> = Object.fromEntries(

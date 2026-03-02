@@ -9,7 +9,7 @@
 
 import { fileURLToPath } from 'url';
 import { join, dirname, basename, normalize } from 'path';
-import { existsSync, readdirSync, readFileSync, writeFileSync, copyFileSync, unlinkSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync, copyFileSync, unlinkSync, mkdirSync } from 'fs';
 import { spawn, execFile } from 'child_process';
 import { promisify } from 'util';
 import { createConnection, Socket } from 'net';
@@ -92,6 +92,8 @@ class GodotServer {
     pendingResolve: null,
     projectPath: null,
   };
+  private lastErrorIndex: number = 0;
+  private lastLogIndex: number = 0;
   private readonly INTERACTION_PORT = 9090;
   private readonly AUTOLOAD_NAME = 'McpInteractionServer';
 
@@ -1561,6 +1563,261 @@ class GodotServer {
             required: ['projectPath', 'resourceType', 'resourcePath'],
           },
         },
+        // File I/O tools
+        {
+          name: 'read_file',
+          description: 'Read a text file from a Godot project',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              projectPath: { type: 'string', description: 'Godot project path' },
+              filePath: { type: 'string', description: 'File path relative to project root' },
+            },
+            required: ['projectPath', 'filePath'],
+          },
+        },
+        {
+          name: 'write_file',
+          description: 'Create or overwrite a text file in a Godot project',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              projectPath: { type: 'string', description: 'Godot project path' },
+              filePath: { type: 'string', description: 'File path relative to project root' },
+              content: { type: 'string', description: 'File content to write' },
+            },
+            required: ['projectPath', 'filePath', 'content'],
+          },
+        },
+        {
+          name: 'delete_file',
+          description: 'Delete a file from a Godot project',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              projectPath: { type: 'string', description: 'Godot project path' },
+              filePath: { type: 'string', description: 'File path relative to project root' },
+            },
+            required: ['projectPath', 'filePath'],
+          },
+        },
+        {
+          name: 'create_directory',
+          description: 'Create a directory inside a Godot project',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              projectPath: { type: 'string', description: 'Godot project path' },
+              directoryPath: { type: 'string', description: 'Directory path relative to project root' },
+            },
+            required: ['projectPath', 'directoryPath'],
+          },
+        },
+        // Error/Log capture tools
+        {
+          name: 'game_get_errors',
+          description: 'Get new push_error/push_warning messages since last call',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
+        {
+          name: 'game_get_logs',
+          description: 'Get new print output from the running game since last call',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
+        // Enhanced input tools
+        {
+          name: 'game_key_hold',
+          description: 'Hold a key down without auto-releasing',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              key: { type: 'string', description: 'Key name (e.g. "W", "Space", "Shift")' },
+              action: { type: 'string', description: 'Godot input action name (e.g. "move_forward")' },
+            },
+            required: [],
+          },
+        },
+        {
+          name: 'game_key_release',
+          description: 'Release a previously held key',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              key: { type: 'string', description: 'Key name to release' },
+              action: { type: 'string', description: 'Godot input action name to release' },
+            },
+            required: [],
+          },
+        },
+        {
+          name: 'game_scroll',
+          description: 'Send mouse scroll wheel event at position',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              x: { type: 'number', description: 'X position for scroll event' },
+              y: { type: 'number', description: 'Y position for scroll event' },
+              direction: { type: 'string', description: '"up", "down", "left", or "right". Default: "up"' },
+              amount: { type: 'number', description: 'Scroll amount (clicks). Default: 1' },
+            },
+            required: ['x', 'y'],
+          },
+        },
+        {
+          name: 'game_mouse_drag',
+          description: 'Drag mouse between two points over N frames',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              fromX: { type: 'number', description: 'Start X coordinate' },
+              fromY: { type: 'number', description: 'Start Y coordinate' },
+              toX: { type: 'number', description: 'End X coordinate' },
+              toY: { type: 'number', description: 'End Y coordinate' },
+              button: { type: 'number', description: 'Mouse button (1=left). Default: 1' },
+              steps: { type: 'number', description: 'Number of frames for the drag. Default: 10' },
+            },
+            required: ['fromX', 'fromY', 'toX', 'toY'],
+          },
+        },
+        {
+          name: 'game_gamepad',
+          description: 'Send gamepad button or axis input event',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', description: '"button" or "axis"' },
+              index: { type: 'number', description: 'Button or axis index' },
+              value: { type: 'number', description: 'Value: 0/1 for buttons, -1.0 to 1.0 for axes' },
+              device: { type: 'number', description: 'Gamepad device index. Default: 0' },
+            },
+            required: ['type', 'index', 'value'],
+          },
+        },
+        // Project management tools
+        {
+          name: 'create_project',
+          description: 'Create a new Godot project from scratch',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              projectPath: { type: 'string', description: 'Directory where the project will be created' },
+              projectName: { type: 'string', description: 'Name of the project' },
+            },
+            required: ['projectPath', 'projectName'],
+          },
+        },
+        {
+          name: 'manage_autoloads',
+          description: 'Add, remove, or list autoloads in a Godot project',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              projectPath: { type: 'string', description: 'Godot project path' },
+              action: { type: 'string', description: '"list", "add", or "remove"' },
+              name: { type: 'string', description: 'Autoload name (required for add/remove)' },
+              path: { type: 'string', description: 'Script/scene path (required for add, e.g. "res://globals.gd")' },
+            },
+            required: ['projectPath', 'action'],
+          },
+        },
+        {
+          name: 'manage_input_map',
+          description: 'Add, remove, or list input actions and bindings',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              projectPath: { type: 'string', description: 'Godot project path' },
+              action: { type: 'string', description: '"list", "add", or "remove"' },
+              actionName: { type: 'string', description: 'Input action name (required for add/remove)' },
+              key: { type: 'string', description: 'Key to bind (for add, e.g. "W", "Space")' },
+              deadzone: { type: 'number', description: 'Deadzone for the action. Default: 0.5' },
+            },
+            required: ['projectPath', 'action'],
+          },
+        },
+        {
+          name: 'manage_export_presets',
+          description: 'Create or modify export preset configuration',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              projectPath: { type: 'string', description: 'Godot project path' },
+              action: { type: 'string', description: '"list", "add", or "remove"' },
+              name: { type: 'string', description: 'Preset name (required for add/remove)' },
+              platform: { type: 'string', description: 'Platform (for add, e.g. "Windows Desktop", "Linux", "Web")' },
+              runnable: { type: 'boolean', description: 'Whether this preset is runnable. Default: false' },
+            },
+            required: ['projectPath', 'action'],
+          },
+        },
+        // Advanced runtime tools
+        {
+          name: 'game_get_camera',
+          description: 'Get active camera position, rotation, and size',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
+        {
+          name: 'game_set_camera',
+          description: 'Move or rotate the active camera',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              position: { type: 'object', description: '{x,y} or {x,y,z} for camera position' },
+              rotation: { type: 'object', description: '{x,y,z} rotation in degrees' },
+              zoom: { type: 'object', description: '{x,y} zoom for Camera2D' },
+              fov: { type: 'number', description: 'Field of view for Camera3D' },
+            },
+            required: [],
+          },
+        },
+        {
+          name: 'game_raycast',
+          description: 'Cast a ray and return collision results',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              from: { type: 'object', description: 'Start point {x,y} or {x,y,z}' },
+              to: { type: 'object', description: 'End point {x,y} or {x,y,z}' },
+              collisionMask: { type: 'number', description: 'Collision mask. Default: 0xFFFFFFFF' },
+            },
+            required: ['from', 'to'],
+          },
+        },
+        {
+          name: 'game_get_audio',
+          description: 'Get audio bus layout and playing streams',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
+        {
+          name: 'game_spawn_node',
+          description: 'Create a new node of any type at runtime',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', description: 'Node class name (e.g. "Sprite2D", "CharacterBody3D")' },
+              name: { type: 'string', description: 'Name for the new node. Default: auto-generated' },
+              parentPath: { type: 'string', description: 'Parent node path. Default: "/root"' },
+              properties: { type: 'object', description: 'Properties to set on the new node' },
+            },
+            required: ['type'],
+          },
+        },
       ],
     }));
 
@@ -1667,6 +1924,51 @@ class GodotServer {
           return await this.handleAttachScript(request.params.arguments);
         case 'create_resource':
           return await this.handleCreateResource(request.params.arguments);
+        // File I/O tools
+        case 'read_file':
+          return await this.handleReadFile(request.params.arguments);
+        case 'write_file':
+          return await this.handleWriteFile(request.params.arguments);
+        case 'delete_file':
+          return await this.handleDeleteFile(request.params.arguments);
+        case 'create_directory':
+          return await this.handleCreateDirectory(request.params.arguments);
+        // Error/Log capture tools
+        case 'game_get_errors':
+          return await this.handleGameGetErrors();
+        case 'game_get_logs':
+          return await this.handleGameGetLogs();
+        // Enhanced input tools
+        case 'game_key_hold':
+          return await this.handleGameKeyHold(request.params.arguments);
+        case 'game_key_release':
+          return await this.handleGameKeyRelease(request.params.arguments);
+        case 'game_scroll':
+          return await this.handleGameScroll(request.params.arguments);
+        case 'game_mouse_drag':
+          return await this.handleGameMouseDrag(request.params.arguments);
+        case 'game_gamepad':
+          return await this.handleGameGamepad(request.params.arguments);
+        // Project management tools
+        case 'create_project':
+          return await this.handleCreateProject(request.params.arguments);
+        case 'manage_autoloads':
+          return await this.handleManageAutoloads(request.params.arguments);
+        case 'manage_input_map':
+          return await this.handleManageInputMap(request.params.arguments);
+        case 'manage_export_presets':
+          return await this.handleManageExportPresets(request.params.arguments);
+        // Advanced runtime tools
+        case 'game_get_camera':
+          return await this.handleGameGetCamera();
+        case 'game_set_camera':
+          return await this.handleGameSetCamera(request.params.arguments);
+        case 'game_raycast':
+          return await this.handleGameRaycast(request.params.arguments);
+        case 'game_get_audio':
+          return await this.handleGameGetAudio();
+        case 'game_spawn_node':
+          return await this.handleGameSpawnNode(request.params.arguments);
         default:
           throw new McpError(
             ErrorCode.MethodNotFound,
@@ -1894,6 +2196,8 @@ class GodotServer {
     const output = this.activeProcess.output;
     const errors = this.activeProcess.errors;
     this.activeProcess = null;
+    this.lastErrorIndex = 0;
+    this.lastLogIndex = 0;
 
     // Remove injected interaction server
     if (this.gameConnection.projectPath) {
@@ -3062,6 +3366,377 @@ class GodotServer {
     return this.headlessOp('create_resource', args, a => ({
       projectPath: a.projectPath,
       params: { resourceType: a.resourceType, resourcePath: a.resourcePath, ...(a.properties ? { properties: a.properties } : {}) },
+    }));
+  }
+
+  // --- File I/O handlers ---
+
+  private async handleReadFile(args: any) {
+    args = normalizeParameters(args || {});
+    if (!args.projectPath || !args.filePath)
+      return createErrorResponse('projectPath and filePath are required.');
+    if (!validatePath(args.projectPath) || !validatePath(args.filePath))
+      return createErrorResponse('Invalid path.');
+    const projectFile = join(args.projectPath, 'project.godot');
+    if (!existsSync(projectFile))
+      return createErrorResponse(`Not a valid Godot project: ${args.projectPath}`);
+    const fullPath = join(args.projectPath, args.filePath);
+    if (!existsSync(fullPath))
+      return createErrorResponse(`File does not exist: ${args.filePath}`);
+    try {
+      const content = readFileSync(fullPath, 'utf8');
+      return { content: [{ type: 'text', text: content }] };
+    } catch (error: any) {
+      return createErrorResponse(`Failed to read file: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  private async handleWriteFile(args: any) {
+    args = normalizeParameters(args || {});
+    if (!args.projectPath || !args.filePath || args.content === undefined)
+      return createErrorResponse('projectPath, filePath, and content are required.');
+    if (!validatePath(args.projectPath) || !validatePath(args.filePath))
+      return createErrorResponse('Invalid path.');
+    const projectFile = join(args.projectPath, 'project.godot');
+    if (!existsSync(projectFile))
+      return createErrorResponse(`Not a valid Godot project: ${args.projectPath}`);
+    try {
+      const fullPath = join(args.projectPath, args.filePath);
+      const parentDir = dirname(fullPath);
+      if (!existsSync(parentDir)) {
+        mkdirSync(parentDir, { recursive: true });
+      }
+      writeFileSync(fullPath, args.content, 'utf8');
+      return { content: [{ type: 'text', text: `File written: ${args.filePath}` }] };
+    } catch (error: any) {
+      return createErrorResponse(`Failed to write file: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  private async handleDeleteFile(args: any) {
+    args = normalizeParameters(args || {});
+    if (!args.projectPath || !args.filePath)
+      return createErrorResponse('projectPath and filePath are required.');
+    if (!validatePath(args.projectPath) || !validatePath(args.filePath))
+      return createErrorResponse('Invalid path.');
+    const projectFile = join(args.projectPath, 'project.godot');
+    if (!existsSync(projectFile))
+      return createErrorResponse(`Not a valid Godot project: ${args.projectPath}`);
+    const fullPath = join(args.projectPath, args.filePath);
+    if (!existsSync(fullPath))
+      return createErrorResponse(`File does not exist: ${args.filePath}`);
+    try {
+      unlinkSync(fullPath);
+      return { content: [{ type: 'text', text: `File deleted: ${args.filePath}` }] };
+    } catch (error: any) {
+      return createErrorResponse(`Failed to delete file: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  private async handleCreateDirectory(args: any) {
+    args = normalizeParameters(args || {});
+    if (!args.projectPath || !args.directoryPath)
+      return createErrorResponse('projectPath and directoryPath are required.');
+    if (!validatePath(args.projectPath) || !validatePath(args.directoryPath))
+      return createErrorResponse('Invalid path.');
+    const projectFile = join(args.projectPath, 'project.godot');
+    if (!existsSync(projectFile))
+      return createErrorResponse(`Not a valid Godot project: ${args.projectPath}`);
+    try {
+      const fullPath = join(args.projectPath, args.directoryPath);
+      mkdirSync(fullPath, { recursive: true });
+      return { content: [{ type: 'text', text: `Directory created: ${args.directoryPath}` }] };
+    } catch (error: any) {
+      return createErrorResponse(`Failed to create directory: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  // --- Error/Log capture handlers ---
+
+  private async handleGameGetErrors() {
+    if (!this.activeProcess)
+      return createErrorResponse('No active Godot process. Use run_project first.');
+    const errors = this.activeProcess.errors.slice(this.lastErrorIndex);
+    this.lastErrorIndex = this.activeProcess.errors.length;
+    return { content: [{ type: 'text', text: JSON.stringify({ count: errors.length, errors }, null, 2) }] };
+  }
+
+  private async handleGameGetLogs() {
+    if (!this.activeProcess)
+      return createErrorResponse('No active Godot process. Use run_project first.');
+    const logs = this.activeProcess.output.slice(this.lastLogIndex);
+    this.lastLogIndex = this.activeProcess.output.length;
+    return { content: [{ type: 'text', text: JSON.stringify({ count: logs.length, logs }, null, 2) }] };
+  }
+
+  // --- Enhanced input handlers ---
+
+  private async handleGameKeyHold(args: any) {
+    args = args || {};
+    if (!args.key && !args.action) return createErrorResponse('Must provide either "key" or "action" parameter.');
+    const params: Record<string, any> = {};
+    if (args.key) params.key = args.key;
+    if (args.action) params.action = args.action;
+    return this.gameCommand('key_hold', args, () => params);
+  }
+
+  private async handleGameKeyRelease(args: any) {
+    args = args || {};
+    if (!args.key && !args.action) return createErrorResponse('Must provide either "key" or "action" parameter.');
+    const params: Record<string, any> = {};
+    if (args.key) params.key = args.key;
+    if (args.action) params.action = args.action;
+    return this.gameCommand('key_release', args, () => params);
+  }
+
+  private async handleGameScroll(args: any) {
+    return this.gameCommand('scroll', args, a => ({
+      x: a.x ?? 0, y: a.y ?? 0, direction: a.direction || 'up', amount: a.amount || 1,
+    }));
+  }
+
+  private async handleGameMouseDrag(args: any) {
+    args = normalizeParameters(args || {});
+    if (args.fromX === undefined || args.fromY === undefined || args.toX === undefined || args.toY === undefined)
+      return createErrorResponse('fromX, fromY, toX, and toY are required.');
+    return this.gameCommand('mouse_drag', args, a => ({
+      from_x: a.fromX, from_y: a.fromY, to_x: a.toX, to_y: a.toY,
+      button: a.button || 1, steps: a.steps || 10,
+    }), 30000);
+  }
+
+  private async handleGameGamepad(args: any) {
+    args = normalizeParameters(args || {});
+    if (!args.type || args.index === undefined || args.value === undefined)
+      return createErrorResponse('type, index, and value are required.');
+    return this.gameCommand('gamepad', args, a => ({
+      type: a.type, index: a.index, value: a.value, device: a.device || 0,
+    }));
+  }
+
+  // --- Project management handlers ---
+
+  private async handleCreateProject(args: any) {
+    args = normalizeParameters(args || {});
+    if (!args.projectPath || !args.projectName)
+      return createErrorResponse('projectPath and projectName are required.');
+    if (!validatePath(args.projectPath))
+      return createErrorResponse('Invalid path.');
+    try {
+      if (!existsSync(args.projectPath)) {
+        mkdirSync(args.projectPath, { recursive: true });
+      }
+      const projectFile = join(args.projectPath, 'project.godot');
+      if (existsSync(projectFile))
+        return createErrorResponse('A project.godot already exists at this path.');
+      const content = `; Engine configuration file.\n; Generated by Godot MCP.\n\nconfig_version=5\n\n[application]\n\nconfig/name="${args.projectName}"\nconfig/features=PackedStringArray("4.3")\n`;
+      writeFileSync(projectFile, content, 'utf8');
+      return { content: [{ type: 'text', text: `Project "${args.projectName}" created at ${args.projectPath}` }] };
+    } catch (error: any) {
+      return createErrorResponse(`Failed to create project: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  private async handleManageAutoloads(args: any) {
+    args = normalizeParameters(args || {});
+    if (!args.projectPath || !args.action)
+      return createErrorResponse('projectPath and action are required.');
+    if (!validatePath(args.projectPath))
+      return createErrorResponse('Invalid path.');
+    const projectFile = join(args.projectPath, 'project.godot');
+    if (!existsSync(projectFile))
+      return createErrorResponse(`Not a valid Godot project: ${args.projectPath}`);
+    try {
+      let content = readFileSync(projectFile, 'utf8');
+      if (args.action === 'list') {
+        const autoloads: Record<string, string> = {};
+        const autoloadMatch = content.match(/\[autoload\]([\s\S]*?)(?=\n\[|$)/);
+        if (autoloadMatch) {
+          for (const line of autoloadMatch[1].split('\n')) {
+            const kv = line.trim().match(/^([^=]+)=(.*)$/);
+            if (kv) autoloads[kv[1].trim()] = kv[2].trim();
+          }
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(autoloads, null, 2) }] };
+      } else if (args.action === 'add') {
+        if (!args.name || !args.path)
+          return createErrorResponse('name and path are required for add action.');
+        const autoloadLine = `${args.name}="*${args.path}"`;
+        if (content.includes('[autoload]')) {
+          content = content.replace('[autoload]', `[autoload]\n\n${autoloadLine}`);
+        } else {
+          content += `\n[autoload]\n\n${autoloadLine}\n`;
+        }
+        writeFileSync(projectFile, content, 'utf8');
+        return { content: [{ type: 'text', text: `Autoload "${args.name}" added: ${args.path}` }] };
+      } else if (args.action === 'remove') {
+        if (!args.name)
+          return createErrorResponse('name is required for remove action.');
+        const pattern = new RegExp(`\\n?${args.name}\\s*=.*\\n?`, 'g');
+        content = content.replace(pattern, '\n');
+        writeFileSync(projectFile, content, 'utf8');
+        return { content: [{ type: 'text', text: `Autoload "${args.name}" removed.` }] };
+      }
+      return createErrorResponse('Invalid action. Use "list", "add", or "remove".');
+    } catch (error: any) {
+      return createErrorResponse(`Failed to manage autoloads: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  private async handleManageInputMap(args: any) {
+    args = normalizeParameters(args || {});
+    if (!args.projectPath || !args.action)
+      return createErrorResponse('projectPath and action are required.');
+    if (!validatePath(args.projectPath))
+      return createErrorResponse('Invalid path.');
+    const projectFile = join(args.projectPath, 'project.godot');
+    if (!existsSync(projectFile))
+      return createErrorResponse(`Not a valid Godot project: ${args.projectPath}`);
+    try {
+      let content = readFileSync(projectFile, 'utf8');
+      if (args.action === 'list') {
+        const actions: Record<string, string> = {};
+        const inputMatch = content.match(/\[input\]([\s\S]*?)(?=\n\[|$)/);
+        if (inputMatch) {
+          for (const line of inputMatch[1].split('\n')) {
+            const kv = line.trim().match(/^([^=]+)=(.*)$/);
+            if (kv) actions[kv[1].trim()] = kv[2].trim();
+          }
+        }
+        return { content: [{ type: 'text', text: JSON.stringify(actions, null, 2) }] };
+      } else if (args.action === 'add') {
+        if (!args.actionName)
+          return createErrorResponse('actionName is required for add action.');
+        const deadzone = args.deadzone !== undefined ? args.deadzone : 0.5;
+        let events = '';
+        if (args.key) {
+          events = `, "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":${this.keyNameToScancode(args.key)},"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)]`;
+        }
+        const inputLine = `${args.actionName}={"deadzone": ${deadzone}${events}}`;
+        if (content.includes('[input]')) {
+          content = content.replace('[input]', `[input]\n\n${inputLine}`);
+        } else {
+          content += `\n[input]\n\n${inputLine}\n`;
+        }
+        writeFileSync(projectFile, content, 'utf8');
+        return { content: [{ type: 'text', text: `Input action "${args.actionName}" added.` }] };
+      } else if (args.action === 'remove') {
+        if (!args.actionName)
+          return createErrorResponse('actionName is required for remove action.');
+        const pattern = new RegExp(`\\n?${args.actionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=.*\\n?`, 'g');
+        content = content.replace(pattern, '\n');
+        writeFileSync(projectFile, content, 'utf8');
+        return { content: [{ type: 'text', text: `Input action "${args.actionName}" removed.` }] };
+      }
+      return createErrorResponse('Invalid action. Use "list", "add", or "remove".');
+    } catch (error: any) {
+      return createErrorResponse(`Failed to manage input map: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  private keyNameToScancode(key: string): number {
+    const map: Record<string, number> = {
+      'A': 65, 'B': 66, 'C': 67, 'D': 68, 'E': 69, 'F': 70, 'G': 71, 'H': 72,
+      'I': 73, 'J': 74, 'K': 75, 'L': 76, 'M': 77, 'N': 78, 'O': 79, 'P': 80,
+      'Q': 81, 'R': 82, 'S': 83, 'T': 84, 'U': 85, 'V': 86, 'W': 87, 'X': 88,
+      'Y': 89, 'Z': 90, 'SPACE': 32, 'ENTER': 16777221, 'ESCAPE': 16777217,
+      'TAB': 16777218, 'BACKSPACE': 16777220, 'UP': 16777232, 'DOWN': 16777234,
+      'LEFT': 16777231, 'RIGHT': 16777233, 'SHIFT': 16777237, 'CTRL': 16777238,
+      'ALT': 16777240, 'F1': 16777244, 'F2': 16777245, 'F3': 16777246,
+      'F4': 16777247, 'F5': 16777248, 'F6': 16777249, 'F7': 16777250,
+      'F8': 16777251, 'F9': 16777252, 'F10': 16777253, 'F11': 16777254,
+      'F12': 16777255,
+    };
+    const upper = key.toUpperCase();
+    return map[upper] || (key.length === 1 ? key.charCodeAt(0) : 0);
+  }
+
+  private async handleManageExportPresets(args: any) {
+    args = normalizeParameters(args || {});
+    if (!args.projectPath || !args.action)
+      return createErrorResponse('projectPath and action are required.');
+    if (!validatePath(args.projectPath))
+      return createErrorResponse('Invalid path.');
+    const projectFile = join(args.projectPath, 'project.godot');
+    if (!existsSync(projectFile))
+      return createErrorResponse(`Not a valid Godot project: ${args.projectPath}`);
+    const presetsFile = join(args.projectPath, 'export_presets.cfg');
+    try {
+      if (args.action === 'list') {
+        if (!existsSync(presetsFile))
+          return { content: [{ type: 'text', text: JSON.stringify({ presets: [] }, null, 2) }] };
+        const content = readFileSync(presetsFile, 'utf8');
+        const presets: Array<{ name: string; platform: string }> = [];
+        const nameMatches = content.matchAll(/name="([^"]+)"/g);
+        const platformMatches = content.matchAll(/platform="([^"]+)"/g);
+        const names = [...nameMatches].map(m => m[1]);
+        const platforms = [...platformMatches].map(m => m[1]);
+        for (let i = 0; i < names.length; i++) {
+          presets.push({ name: names[i], platform: platforms[i] || 'unknown' });
+        }
+        return { content: [{ type: 'text', text: JSON.stringify({ presets }, null, 2) }] };
+      } else if (args.action === 'add') {
+        if (!args.name || !args.platform)
+          return createErrorResponse('name and platform are required for add action.');
+        const runnable = args.runnable ? 'true' : 'false';
+        const presetBlock = `\n[preset.${Date.now()}]\n\nname="${args.name}"\nplatform="${args.platform}"\nrunnable=${runnable}\n`;
+        let content = existsSync(presetsFile) ? readFileSync(presetsFile, 'utf8') : '';
+        content += presetBlock;
+        writeFileSync(presetsFile, content, 'utf8');
+        return { content: [{ type: 'text', text: `Export preset "${args.name}" added for platform "${args.platform}".` }] };
+      } else if (args.action === 'remove') {
+        if (!args.name)
+          return createErrorResponse('name is required for remove action.');
+        if (!existsSync(presetsFile))
+          return createErrorResponse('No export_presets.cfg file found.');
+        let content = readFileSync(presetsFile, 'utf8');
+        // Remove the preset section containing the given name
+        const pattern = new RegExp(`\\[preset\\.[^\\]]+\\]\\s*\\n[\\s\\S]*?name="${args.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[\\s\\S]*?(?=\\[preset\\.|$)`, 'g');
+        content = content.replace(pattern, '');
+        writeFileSync(presetsFile, content, 'utf8');
+        return { content: [{ type: 'text', text: `Export preset "${args.name}" removed.` }] };
+      }
+      return createErrorResponse('Invalid action. Use "list", "add", or "remove".');
+    } catch (error: any) {
+      return createErrorResponse(`Failed to manage export presets: ${error?.message || 'Unknown error'}`);
+    }
+  }
+
+  // --- Advanced runtime handlers ---
+
+  private async handleGameGetCamera() {
+    return this.gameCommand('get_camera', {}, () => ({}));
+  }
+
+  private async handleGameSetCamera(args: any) {
+    return this.gameCommand('set_camera', args, a => ({
+      ...(a.position ? { position: a.position } : {}),
+      ...(a.rotation ? { rotation: a.rotation } : {}),
+      ...(a.zoom ? { zoom: a.zoom } : {}),
+      ...(a.fov !== undefined ? { fov: a.fov } : {}),
+    }));
+  }
+
+  private async handleGameRaycast(args: any) {
+    args = normalizeParameters(args || {});
+    if (!args.from || !args.to)
+      return createErrorResponse('from and to are required.');
+    return this.gameCommand('raycast', args, a => ({
+      from: a.from, to: a.to, collision_mask: a.collisionMask ?? 0xFFFFFFFF,
+    }));
+  }
+
+  private async handleGameGetAudio() {
+    return this.gameCommand('get_audio', {}, () => ({}));
+  }
+
+  private async handleGameSpawnNode(args: any) {
+    args = normalizeParameters(args || {});
+    if (!args.type)
+      return createErrorResponse('type is required.');
+    return this.gameCommand('spawn_node', args, a => ({
+      type: a.type, name: a.name || '', parent_path: a.parentPath || '/root',
+      ...(a.properties ? { properties: a.properties } : {}),
     }));
   }
 
