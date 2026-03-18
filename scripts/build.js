@@ -20,12 +20,6 @@ try {
     path.join(__dirname, '..', 'build', 'scripts', 'godot_operations.gd')
   );
   
-  // Copy the mcp_interaction_server.gd file
-  fs.copyFileSync(
-    path.join(__dirname, '..', 'src', 'scripts', 'mcp_interaction_server.gd'),
-    path.join(__dirname, '..', 'build', 'scripts', 'mcp_interaction_server.gd')
-  );
-
   console.log('Successfully copied scripts to build/scripts');
 } catch (error) {
   console.error('Error copying scripts:', error);
