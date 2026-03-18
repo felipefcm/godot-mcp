@@ -1564,55 +1564,55 @@ class GodotServer {
           },
         },
         // File I/O tools
-        {
-          name: 'read_file',
-          description: 'Read a text file from a Godot project',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              projectPath: { type: 'string', description: 'Godot project path' },
-              filePath: { type: 'string', description: 'File path relative to project root' },
-            },
-            required: ['projectPath', 'filePath'],
-          },
-        },
-        {
-          name: 'write_file',
-          description: 'Create or overwrite a text file in a Godot project',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              projectPath: { type: 'string', description: 'Godot project path' },
-              filePath: { type: 'string', description: 'File path relative to project root' },
-              content: { type: 'string', description: 'File content to write' },
-            },
-            required: ['projectPath', 'filePath', 'content'],
-          },
-        },
-        {
-          name: 'delete_file',
-          description: 'Delete a file from a Godot project',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              projectPath: { type: 'string', description: 'Godot project path' },
-              filePath: { type: 'string', description: 'File path relative to project root' },
-            },
-            required: ['projectPath', 'filePath'],
-          },
-        },
-        {
-          name: 'create_directory',
-          description: 'Create a directory inside a Godot project',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              projectPath: { type: 'string', description: 'Godot project path' },
-              directoryPath: { type: 'string', description: 'Directory path relative to project root' },
-            },
-            required: ['projectPath', 'directoryPath'],
-          },
-        },
+        // {
+        //   name: 'read_file',
+        //   description: 'Read a text file from a Godot project',
+        //   inputSchema: {
+        //     type: 'object',
+        //     properties: {
+        //       projectPath: { type: 'string', description: 'Godot project path' },
+        //       filePath: { type: 'string', description: 'File path relative to project root' },
+        //     },
+        //     required: ['projectPath', 'filePath'],
+        //   },
+        // },
+        // {
+        //   name: 'write_file',
+        //   description: 'Create or overwrite a text file in a Godot project',
+        //   inputSchema: {
+        //     type: 'object',
+        //     properties: {
+        //       projectPath: { type: 'string', description: 'Godot project path' },
+        //       filePath: { type: 'string', description: 'File path relative to project root' },
+        //       content: { type: 'string', description: 'File content to write' },
+        //     },
+        //     required: ['projectPath', 'filePath', 'content'],
+        //   },
+        // },
+        // {
+        //   name: 'delete_file',
+        //   description: 'Delete a file from a Godot project',
+        //   inputSchema: {
+        //     type: 'object',
+        //     properties: {
+        //       projectPath: { type: 'string', description: 'Godot project path' },
+        //       filePath: { type: 'string', description: 'File path relative to project root' },
+        //     },
+        //     required: ['projectPath', 'filePath'],
+        //   },
+        // },
+        // {
+        //   name: 'create_directory',
+        //   description: 'Create a directory inside a Godot project',
+        //   inputSchema: {
+        //     type: 'object',
+        //     properties: {
+        //       projectPath: { type: 'string', description: 'Godot project path' },
+        //       directoryPath: { type: 'string', description: 'Directory path relative to project root' },
+        //     },
+        //     required: ['projectPath', 'directoryPath'],
+        //   },
+        // },
         // Error/Log capture tools
         {
           name: 'game_get_errors',
@@ -1702,18 +1702,18 @@ class GodotServer {
           },
         },
         // Project management tools
-        {
-          name: 'create_project',
-          description: 'Create a new Godot project from scratch',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              projectPath: { type: 'string', description: 'Directory where the project will be created' },
-              projectName: { type: 'string', description: 'Name of the project' },
-            },
-            required: ['projectPath', 'projectName'],
-          },
-        },
+        // {
+        //   name: 'create_project',
+        //   description: 'Create a new Godot project from scratch',
+        //   inputSchema: {
+        //     type: 'object',
+        //     properties: {
+        //       projectPath: { type: 'string', description: 'Directory where the project will be created' },
+        //       projectName: { type: 'string', description: 'Name of the project' },
+        //     },
+        //     required: ['projectPath', 'projectName'],
+        //   },
+        // },
         {
           name: 'manage_autoloads',
           description: 'Add, remove, or list autoloads in a Godot project',
@@ -2797,22 +2797,22 @@ class GodotServer {
             required: ['projectPath', 'resourcePath', 'action'],
           },
         },
-        {
-          name: 'create_script',
-          description: 'Create a GDScript file from a template',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              projectPath: { type: 'string', description: 'Godot project path' },
-              scriptPath: { type: 'string', description: 'Script file path (relative to project)' },
-              extends: { type: 'string', description: 'Base class to extend. Default: Node' },
-              className: { type: 'string', description: 'Optional class_name' },
-              methods: { type: 'array', description: 'Method stubs to include' },
-              source: { type: 'string', description: 'Full source code (overrides template)' },
-            },
-            required: ['projectPath', 'scriptPath'],
-          },
-        },
+        // {
+        //   name: 'create_script',
+        //   description: 'Create a GDScript file from a template',
+        //   inputSchema: {
+        //     type: 'object',
+        //     properties: {
+        //       projectPath: { type: 'string', description: 'Godot project path' },
+        //       scriptPath: { type: 'string', description: 'Script file path (relative to project)' },
+        //       extends: { type: 'string', description: 'Base class to extend. Default: Node' },
+        //       className: { type: 'string', description: 'Optional class_name' },
+        //       methods: { type: 'array', description: 'Method stubs to include' },
+        //       source: { type: 'string', description: 'Full source code (overrides template)' },
+        //     },
+        //     required: ['projectPath', 'scriptPath'],
+        //   },
+        // },
         {
           name: 'manage_scene_signals',
           description: 'List/add/remove signal connections in .tscn files',
